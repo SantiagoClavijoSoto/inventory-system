@@ -6,9 +6,11 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
+from django.http import HttpResponse
 from django.utils import timezone
 
 from apps.users.permissions import HasPermission
+from .pdf_service import ReceiptPDFService
 from apps.branches.models import Branch
 from .models import Sale, DailyCashRegister
 from .serializers import (
@@ -266,6 +268,25 @@ class SaleViewSet(viewsets.ModelViewSet):
             'customer_name': sale.customer_name,
         }
         return Response(receipt_data)
+
+    @action(detail=True, methods=['get'])
+    def receipt_pdf(self, request, pk=None):
+        """Generate and download receipt as PDF."""
+        sale = self.get_object()
+
+        # Generate PDF
+        pdf_buffer = ReceiptPDFService.generate_receipt(sale)
+
+        # Build response
+        response = HttpResponse(
+            pdf_buffer.getvalue(),
+            content_type='application/pdf'
+        )
+        response['Content-Disposition'] = (
+            f'attachment; filename="recibo_{sale.sale_number}.pdf"'
+        )
+
+        return response
 
 
 class CashRegisterViewSet(viewsets.ModelViewSet):
