@@ -1,0 +1,75 @@
+"""
+Reusable model mixins for audit trails and common functionality.
+"""
+from django.db import models
+from django.conf import settings
+
+
+class TimestampMixin(models.Model):
+    """Adds created_at and updated_at timestamps to models."""
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Fecha de creación')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Última actualización')
+
+    class Meta:
+        abstract = True
+
+
+class AuditMixin(TimestampMixin):
+    """Adds audit fields including user who created/updated the record."""
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='%(class)s_created',
+        verbose_name='Creado por'
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='%(class)s_updated',
+        verbose_name='Actualizado por'
+    )
+
+    class Meta:
+        abstract = True
+
+
+class SoftDeleteMixin(models.Model):
+    """Adds soft delete capability to models."""
+    is_deleted = models.BooleanField(default=False, verbose_name='Eliminado')
+    deleted_at = models.DateTimeField(null=True, blank=True, verbose_name='Fecha de eliminación')
+    deleted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='%(class)s_deleted',
+        verbose_name='Eliminado por'
+    )
+
+    class Meta:
+        abstract = True
+
+    def soft_delete(self, user=None):
+        """Soft delete the instance."""
+        from django.utils import timezone
+        self.is_deleted = True
+        self.deleted_at = timezone.now()
+        self.deleted_by = user
+        self.save(update_fields=['is_deleted', 'deleted_at', 'deleted_by'])
+
+    def restore(self):
+        """Restore a soft-deleted instance."""
+        self.is_deleted = False
+        self.deleted_at = None
+        self.deleted_by = None
+        self.save(update_fields=['is_deleted', 'deleted_at', 'deleted_by'])
+
+
+class ActiveManager(models.Manager):
+    """Manager that returns only non-deleted objects."""
+    def get_queryset(self):
+        return super().get_queryset().filter(is_deleted=False)
