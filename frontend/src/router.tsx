@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate } from 'react-router-dom'
+import { createBrowserRouter } from 'react-router-dom'
 import { MainLayout } from '@/components/layout'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 
@@ -8,6 +8,7 @@ import { Login } from '@/pages/auth/Login'
 // Main Pages
 import { Dashboard } from '@/pages/dashboard/Dashboard'
 import { Products } from '@/pages/inventory/Products'
+import { POS } from '@/pages/pos/POS'
 
 // Error Pages
 import { NotFound } from '@/pages/errors/NotFound'
@@ -49,7 +50,7 @@ export const router = createBrowserRouter([
         path: 'pos',
         element: (
           <ProtectedRoute requiredModule="sales">
-            <PlaceholderPage title="Punto de Venta" />
+            <POS />
           </ProtectedRoute>
         ),
       },

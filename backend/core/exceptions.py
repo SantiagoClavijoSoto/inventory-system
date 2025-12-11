@@ -59,3 +59,10 @@ class StockTransferError(APIException):
     status_code = status.HTTP_400_BAD_REQUEST
     default_detail = 'Error al transferir stock entre sucursales.'
     default_code = 'stock_transfer_error'
+
+
+class ValidationError(APIException):
+    """Raised when validation fails for an operation."""
+    status_code = status.HTTP_400_BAD_REQUEST
+    default_detail = 'Error de validación.'
+    default_code = 'validation_error'

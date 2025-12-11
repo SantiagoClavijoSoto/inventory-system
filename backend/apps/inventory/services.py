@@ -348,3 +348,66 @@ class StockService:
             return updated > 0
         except Exception:
             return False
+
+    @classmethod
+    def record_sale(
+        cls,
+        product: Product,
+        branch,
+        quantity: int,
+        reference: str,
+        user,
+        notes: str = ''
+    ) -> StockMovement:
+        """
+        Record a sale transaction - reduces stock.
+        Alias for process_sale with branch object support.
+        """
+        branch_id = branch.id if hasattr(branch, 'id') else branch
+        return cls.process_sale(
+            product=product,
+            branch_id=branch_id,
+            quantity=quantity,
+            user=user,
+            sale_reference=reference
+        )
+
+    @classmethod
+    @transaction.atomic
+    def record_return_customer(
+        cls,
+        product: Product,
+        branch,
+        quantity: int,
+        reference: str,
+        user,
+        notes: str = ''
+    ) -> StockMovement:
+        """
+        Record a customer return - increases stock.
+
+        Args:
+            product: Product instance
+            branch: Branch instance or ID
+            quantity: Quantity returned (must be positive)
+            reference: Return/refund reference
+            user: User processing the return
+            notes: Optional notes
+
+        Returns:
+            StockMovement record
+        """
+        if quantity <= 0:
+            raise ValidationError("La cantidad devuelta debe ser positiva")
+
+        branch_id = branch.id if hasattr(branch, 'id') else branch
+
+        return cls.adjust_stock(
+            product=product,
+            branch_id=branch_id,
+            quantity=quantity,
+            movement_type='return_customer',
+            user=user,
+            reference=reference,
+            notes=notes
+        )

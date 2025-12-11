@@ -8,11 +8,22 @@ class HasPermission(BasePermission):
     """
     Custom permission class that checks for specific permissions.
 
-    Usage:
+    Usage (factory pattern):
+        class MyView(APIView):
+            permission_classes = [IsAuthenticated, HasPermission('inventory:manage')]
+
+    Usage (attribute pattern):
         class MyView(APIView):
             permission_classes = [IsAuthenticated, HasPermission]
             required_permission = 'module:action'
     """
+
+    def __init__(self, permission=None):
+        self.permission = permission
+
+    def __call__(self):
+        # When used as HasPermission('permission'), return self for DRF
+        return self
 
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
@@ -22,8 +33,8 @@ class HasPermission(BasePermission):
         if request.user.is_superuser:
             return True
 
-        # Get required permission from view
-        required_permission = getattr(view, 'required_permission', None)
+        # Get required permission from instance or view
+        required_permission = self.permission or getattr(view, 'required_permission', None)
         if not required_permission:
             return True  # No specific permission required
 

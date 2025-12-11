@@ -35,18 +35,21 @@ export default {
         },
         success: {
           50: '#f0fdf4',
+          100: '#dcfce7',
           500: '#22c55e',
           600: '#16a34a',
           700: '#15803d',
         },
         warning: {
           50: '#fffbeb',
+          100: '#fef3c7',
           500: '#f59e0b',
           600: '#d97706',
           700: '#b45309',
         },
         danger: {
           50: '#fef2f2',
+          100: '#fee2e2',
           500: '#ef4444',
           600: '#dc2626',
           700: '#b91c1c',
@@ -62,6 +65,7 @@ export default {
       animation: {
         'slide-in': 'slideIn 0.2s ease-out',
         'fade-in': 'fadeIn 0.2s ease-out',
+        'scan': 'scan 2s ease-in-out infinite',
       },
       keyframes: {
         slideIn: {
@@ -71,6 +75,10 @@ export default {
         fadeIn: {
           '0%': { opacity: '0' },
           '100%': { opacity: '1' },
+        },
+        scan: {
+          '0%, 100%': { top: '0' },
+          '50%': { top: '100%' },
         },
       },
     },
