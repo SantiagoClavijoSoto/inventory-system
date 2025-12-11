@@ -202,10 +202,10 @@ class EmployeeService:
         Returns:
             QuerySet of employees
         """
-        queryset = Employee.objects.filter(branch=branch)
-
-        if not include_inactive:
-            queryset = queryset.filter(status='active', is_deleted=False)
+        if include_inactive:
+            queryset = Employee.objects.filter(branch=branch)
+        else:
+            queryset = Employee.active_objects.filter(branch=branch, status='active')
 
         return queryset.select_related('user', 'branch')
 

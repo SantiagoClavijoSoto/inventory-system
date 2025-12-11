@@ -40,7 +40,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     stats: Get employee statistics
     sales: Get employee's sales history
     """
-    queryset = Employee.objects.select_related('user', 'branch').filter(is_deleted=False)
+    queryset = Employee.active_objects.select_related('user', 'branch')
     permission_classes = [IsAuthenticated]
 
     def get_serializer_class(self):

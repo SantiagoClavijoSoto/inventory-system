@@ -29,7 +29,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
     ViewSet for product categories.
     Supports hierarchical category management.
     """
-    queryset = Category.objects.filter(is_deleted=False)
+    queryset = Category.active.all()
     serializer_class = CategorySerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
@@ -71,7 +71,7 @@ class ProductViewSet(viewsets.ModelViewSet):
     """
     ViewSet for products with barcode search and stock management.
     """
-    queryset = Product.objects.filter(is_deleted=False).select_related(
+    queryset = Product.active.select_related(
         'category', 'supplier'
     )
     permission_classes = [IsAuthenticated]
@@ -112,7 +112,7 @@ class ProductViewSet(viewsets.ModelViewSet):
             )
 
         try:
-            product = Product.objects.filter(is_deleted=False, is_active=True).get(
+            product = Product.active.filter(is_active=True).get(
                 Q(barcode=code) | Q(sku=code)
             )
         except Product.DoesNotExist:
@@ -169,9 +169,10 @@ class ProductViewSet(viewsets.ModelViewSet):
         """Get products with low stock"""
         branch_id = request.query_params.get('branch_id')
 
+        # Filter through active products by joining with is_active filter
         query = BranchStock.objects.select_related('product', 'branch').filter(
-            product__is_deleted=False,
-            product__is_active=True
+            product__is_active=True,
+            product__is_deleted=False  # Keep explicit for join query
         )
 
         if branch_id:
@@ -209,10 +210,7 @@ class StockViewSet(viewsets.ViewSet):
 
         data = serializer.validated_data
         try:
-            product = Product.objects.get(
-                id=data['product_id'],
-                is_deleted=False
-            )
+            product = Product.active.get(id=data['product_id'])
         except Product.DoesNotExist:
             return Response(
                 {'error': 'Producto no encontrado'},
@@ -242,10 +240,7 @@ class StockViewSet(viewsets.ViewSet):
 
         data = serializer.validated_data
         try:
-            product = Product.objects.get(
-                id=data['product_id'],
-                is_deleted=False
-            )
+            product = Product.active.get(id=data['product_id'])
         except Product.DoesNotExist:
             return Response(
                 {'error': 'Producto no encontrado'},
@@ -278,8 +273,8 @@ class StockViewSet(viewsets.ViewSet):
 
         stocks = BranchStock.objects.filter(
             branch_id=branch_id,
-            product__is_deleted=False,
-            product__is_active=True
+            product__is_active=True,
+            product__is_deleted=False  # Keep explicit for join query
         ).select_related('product', 'product__category')
 
         serializer = BranchStockSerializer(stocks, many=True)
@@ -319,8 +314,8 @@ class StockAlertViewSet(viewsets.ModelViewSet):
         stocks = BranchStock.objects.select_related(
             'product', 'branch'
         ).filter(
-            product__is_deleted=False,
-            product__is_active=True
+            product__is_active=True,
+            product__is_deleted=False  # Keep explicit for join query
         )
 
         if branch_id:

@@ -2,7 +2,7 @@ from django.db import models
 from django.core.validators import MinValueValidator
 from decimal import Decimal
 
-from core.mixins import TimestampMixin, SoftDeleteMixin
+from core.mixins import TimestampMixin, SoftDeleteMixin, ActiveManager
 
 
 class Supplier(TimestampMixin, SoftDeleteMixin, models.Model):
@@ -57,6 +57,10 @@ class Supplier(TimestampMixin, SoftDeleteMixin, models.Model):
     )
 
     is_active = models.BooleanField(default=True, verbose_name='Activo')
+
+    # Managers
+    objects = models.Manager()
+    active = ActiveManager()
 
     class Meta:
         verbose_name = 'Proveedor'

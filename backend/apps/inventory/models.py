@@ -2,7 +2,7 @@ from django.db import models
 from django.core.validators import MinValueValidator
 from decimal import Decimal
 
-from core.mixins import TimestampMixin, SoftDeleteMixin
+from core.mixins import TimestampMixin, SoftDeleteMixin, ActiveManager
 
 
 class Category(TimestampMixin, SoftDeleteMixin, models.Model):
@@ -21,6 +21,10 @@ class Category(TimestampMixin, SoftDeleteMixin, models.Model):
         verbose_name='Categoría padre'
     )
     is_active = models.BooleanField(default=True, verbose_name='Activo')
+
+    # Managers
+    objects = models.Manager()
+    active = ActiveManager()
 
     class Meta:
         verbose_name = 'Categoría'
@@ -43,9 +47,11 @@ class Category(TimestampMixin, SoftDeleteMixin, models.Model):
         return ' > '.join(path)
 
     def get_descendants(self):
-        """Returns all descendant categories"""
-        descendants = list(self.children.filter(is_deleted=False))
-        for child in self.children.filter(is_deleted=False):
+        """Returns all descendant categories (non-deleted only)"""
+        # Use filter on related manager since children is a RelatedManager
+        active_children = self.children.filter(is_deleted=False)
+        descendants = list(active_children)
+        for child in active_children:
             descendants.extend(child.get_descendants())
         return descendants
 
@@ -147,6 +153,10 @@ class Product(TimestampMixin, SoftDeleteMixin, models.Model):
         related_name='products',
         verbose_name='Proveedor principal'
     )
+
+    # Managers
+    objects = models.Manager()
+    active = ActiveManager()
 
     class Meta:
         verbose_name = 'Producto'
