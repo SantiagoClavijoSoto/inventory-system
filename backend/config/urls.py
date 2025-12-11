@@ -11,6 +11,31 @@ from drf_spectacular.views import (
     SpectacularSwaggerView,
 )
 
+# Import shifts patterns
+from apps.employees.urls import shifts_urlpatterns
+
+# API v1 URL patterns
+api_v1_patterns = [
+    # Auth
+    path('auth/', include('apps.users.urls')),
+    # Core modules
+    path('branches/', include('apps.branches.urls')),
+    path('employees/', include('apps.employees.urls')),
+    path('shifts/', include(shifts_urlpatterns)),
+    # Inventory
+    path('categories/', include('apps.inventory.urls.categories')),
+    path('products/', include('apps.inventory.urls.products')),
+    path('stock/', include('apps.inventory.urls.stock')),
+    # Sales
+    path('sales/', include('apps.sales.urls.sales')),
+    path('registers/', include('apps.sales.urls.registers')),
+    # Suppliers
+    path('suppliers/', include('apps.suppliers.urls')),
+    # Reports & Alerts
+    path('reports/', include('apps.reports.urls')),
+    path('alerts/', include('apps.alerts.urls')),
+]
+
 urlpatterns = [
     # Admin
     path('admin/', admin.site.urls),
@@ -20,15 +45,8 @@ urlpatterns = [
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
 
-    # API Endpoints
-    path('api/auth/', include('apps.users.urls')),
-    path('api/branches/', include('apps.branches.urls')),
-    path('api/employees/', include('apps.employees.urls')),
-    path('api/inventory/', include('apps.inventory.urls')),
-    path('api/sales/', include('apps.sales.urls')),
-    path('api/suppliers/', include('apps.suppliers.urls')),
-    path('api/reports/', include('apps.reports.urls')),
-    path('api/alerts/', include('apps.alerts.urls')),
+    # API v1
+    path('api/v1/', include(api_v1_patterns)),
 ]
 
 # Serve media files in development

@@ -3,11 +3,13 @@ Pytest configuration and fixtures for the inventory system.
 """
 import pytest
 from decimal import Decimal
+from datetime import date, timedelta
 from django.utils import timezone
 
 from apps.users.models import User, Role, Permission
 from apps.branches.models import Branch
 from apps.inventory.models import Category, Product, BranchStock
+from apps.employees.models import Employee, Shift
 
 
 @pytest.fixture
@@ -177,3 +179,92 @@ def authenticated_cashier_client(api_client, cashier_user):
     """Create an authenticated API client with cashier user."""
     api_client.force_authenticate(user=cashier_user)
     return api_client
+
+
+# Employee fixtures
+@pytest.fixture
+def employee_user(db, cashier_role, branch):
+    """Create a user for an employee."""
+    user = User.objects.create_user(
+        email='employee@test.com',
+        password='testpass123',
+        first_name='Juan',
+        last_name='Empleado',
+        role=cashier_role,
+        default_branch=branch,
+        is_active=True
+    )
+    return user
+
+
+@pytest.fixture
+def employee(db, employee_user, branch):
+    """Create a test employee."""
+    return Employee.objects.create(
+        user=employee_user,
+        employee_code='EMP-TST-0001',
+        branch=branch,
+        position='Cajero',
+        department='Ventas',
+        employment_type='full_time',
+        hire_date=date.today() - timedelta(days=365),
+        salary=Decimal('15000.00'),
+        hourly_rate=Decimal('100.00'),
+        status='active'
+    )
+
+
+@pytest.fixture
+def second_employee_user(db, cashier_role, branch):
+    """Create a second user for employee testing."""
+    user = User.objects.create_user(
+        email='employee2@test.com',
+        password='testpass123',
+        first_name='Maria',
+        last_name='Trabajadora',
+        role=cashier_role,
+        default_branch=branch,
+        is_active=True
+    )
+    return user
+
+
+@pytest.fixture
+def second_employee(db, second_employee_user, branch):
+    """Create a second test employee."""
+    return Employee.objects.create(
+        user=second_employee_user,
+        employee_code='EMP-TST-0002',
+        branch=branch,
+        position='Supervisor',
+        department='Ventas',
+        employment_type='full_time',
+        hire_date=date.today() - timedelta(days=730),
+        salary=Decimal('20000.00'),
+        hourly_rate=Decimal('125.00'),
+        status='active'
+    )
+
+
+@pytest.fixture
+def shift(db, employee, branch):
+    """Create a completed shift for testing."""
+    clock_in = timezone.now() - timedelta(hours=8)
+    clock_out = timezone.now()
+    shift = Shift.objects.create(
+        employee=employee,
+        branch=branch,
+        clock_in=clock_in,
+        clock_out=clock_out,
+    )
+    return shift
+
+
+@pytest.fixture
+def open_shift(db, employee, branch):
+    """Create an open (ongoing) shift for testing."""
+    return Shift.objects.create(
+        employee=employee,
+        branch=branch,
+        clock_in=timezone.now() - timedelta(hours=2),
+    )
