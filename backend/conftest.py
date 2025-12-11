@@ -37,7 +37,7 @@ def cashier_role(db):
 
 
 @pytest.fixture
-def admin_user(db, admin_role):
+def admin_user(db, admin_role, branch):
     """Create an admin user for testing."""
     user = User.objects.create_user(
         email='admin@test.com',
@@ -45,6 +45,7 @@ def admin_user(db, admin_role):
         first_name='Admin',
         last_name='User',
         role=admin_role,
+        default_branch=branch,
         is_active=True
     )
     return user
@@ -268,3 +269,23 @@ def open_shift(db, employee, branch):
         branch=branch,
         clock_in=timezone.now() - timedelta(hours=2),
     )
+
+
+# API client aliases for test readability
+@pytest.fixture
+def authenticated_client(authenticated_admin_client):
+    """Alias for authenticated admin client."""
+    return authenticated_admin_client
+
+
+@pytest.fixture
+def admin_client(authenticated_admin_client):
+    """Alias for authenticated admin client with admin permissions."""
+    return authenticated_admin_client
+
+
+@pytest.fixture
+def employee_client(api_client, employee):
+    """Create an authenticated API client for the employee user."""
+    api_client.force_authenticate(user=employee.user)
+    return api_client
