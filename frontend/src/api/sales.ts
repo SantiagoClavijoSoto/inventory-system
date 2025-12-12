@@ -124,7 +124,7 @@ export const saleApi = {
 export const cashRegisterApi = {
   getAll: async (filters?: { branch?: number; page?: number }) => {
     const response = await apiClient.get<PaginatedResponse<DailyCashRegister>>(
-      '/sales/cash-register/',
+      '/registers/',
       { params: filters }
     )
     return response.data
@@ -132,14 +132,14 @@ export const cashRegisterApi = {
 
   getById: async (id: number) => {
     const response = await apiClient.get<DailyCashRegister>(
-      `/sales/cash-register/${id}/`
+      `/registers/${id}/`
     )
     return response.data
   },
 
   getCurrent: async (branchId: number) => {
     const response = await apiClient.get<DailyCashRegister>(
-      '/sales/cash-register/current/',
+      '/registers/current/',
       { params: { branch: branchId } }
     )
     return response.data
@@ -147,7 +147,7 @@ export const cashRegisterApi = {
 
   open: async (branchId: number, openingAmount: number) => {
     const response = await apiClient.post<DailyCashRegister>(
-      '/sales/cash-register/open/',
+      '/registers/open/',
       {
         branch_id: branchId,
         opening_amount: openingAmount,
@@ -158,7 +158,7 @@ export const cashRegisterApi = {
 
   close: async (id: number, closingAmount: number, notes?: string) => {
     const response = await apiClient.post<DailyCashRegister>(
-      `/sales/cash-register/${id}/close/`,
+      `/registers/${id}/close/`,
       {
         closing_amount: closingAmount,
         notes,

@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
-import { Store, X, AlertTriangle } from 'lucide-react'
+import { Store, X, AlertTriangle, DollarSign } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { Button, Card, CardContent, Badge } from '@/components/ui'
+import { Button, Card, CardContent, Badge, Input, Modal, ModalFooter } from '@/components/ui'
 import { ProductSearch, Cart, PaymentModal, SaleSuccessModal } from '@/components/pos'
 import { BarcodeScanner } from '@/components/barcode/BarcodeScanner'
 import { useCartStore } from '@/store/cartStore'
@@ -21,6 +21,9 @@ export function POS() {
   const [completedSale, setCompletedSale] = useState<Sale | null>(null)
   const [cashRegister, setCashRegister] = useState<DailyCashRegister | null>(null)
   const [isLoadingRegister, setIsLoadingRegister] = useState(true)
+  const [showOpenRegisterModal, setShowOpenRegisterModal] = useState(false)
+  const [openingAmount, setOpeningAmount] = useState('')
+  const [isOpeningRegister, setIsOpeningRegister] = useState(false)
 
   const { addItem, clearCart, getCreateSalePayload, getItemCount } = useCartStore()
   const { currentBranch } = useAuthStore()
@@ -139,6 +142,32 @@ export function POS() {
     setShowSuccessModal(false)
   }
 
+  // Handle open cash register
+  const handleOpenRegister = async () => {
+    if (!currentBranch) return
+
+    const amount = parseFloat(openingAmount)
+    if (isNaN(amount) || amount < 0) {
+      toast.error('Ingresa un monto válido')
+      return
+    }
+
+    setIsOpeningRegister(true)
+    try {
+      const register = await cashRegisterApi.open(currentBranch.id, amount)
+      setCashRegister(register)
+      setShowOpenRegisterModal(false)
+      setOpeningAmount('')
+      toast.success('Caja abierta exitosamente')
+    } catch (error: unknown) {
+      const errorMsg =
+        error instanceof Error ? error.message : 'Error al abrir la caja'
+      toast.error(errorMsg)
+    } finally {
+      setIsOpeningRegister(false)
+    }
+  }
+
   // Handle error
   const handleError = (error: string) => {
     toast.error(error)
@@ -237,6 +266,29 @@ export function POS() {
         </div>
       </div>
 
+      {/* Cash Register Alert Banner */}
+      {!cashRegister && !isLoadingRegister && (
+        <div className="mb-4 bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="w-6 h-6 text-amber-500" />
+            <div>
+              <p className="font-medium text-amber-800">
+                La caja no está abierta
+              </p>
+              <p className="text-sm text-amber-600">
+                Debes abrir la caja para poder realizar ventas
+              </p>
+            </div>
+          </div>
+          <Button
+            onClick={() => setShowOpenRegisterModal(true)}
+          >
+            <DollarSign className="w-4 h-4 mr-1" />
+            Abrir Caja
+          </Button>
+        </div>
+      )}
+
       {/* Main Content */}
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6 min-h-0">
         {/* Left Panel - Search/Scanner */}
@@ -322,6 +374,55 @@ export function POS() {
         onPrintReceipt={handlePrintReceipt}
         onNewSale={handleNewSale}
       />
+
+      {/* Open Register Modal */}
+      <Modal
+        isOpen={showOpenRegisterModal}
+        onClose={() => {
+          setShowOpenRegisterModal(false)
+          setOpeningAmount('')
+        }}
+        title="Abrir Caja"
+        description="Ingresa el monto inicial de efectivo en caja"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-secondary-700 mb-1">
+              Monto de apertura
+            </label>
+            <Input
+              type="number"
+              value={openingAmount}
+              onChange={(e) => setOpeningAmount(e.target.value)}
+              placeholder="0.00"
+              min="0"
+              step="0.01"
+              autoFocus
+            />
+            <p className="mt-1 text-xs text-secondary-500">
+              Ingresa el monto de efectivo con el que inicias la caja
+            </p>
+          </div>
+        </div>
+        <ModalFooter>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setShowOpenRegisterModal(false)
+              setOpeningAmount('')
+            }}
+          >
+            Cancelar
+          </Button>
+          <Button
+            onClick={handleOpenRegister}
+            disabled={isOpeningRegister}
+          >
+            {isOpeningRegister ? 'Abriendo...' : 'Abrir Caja'}
+          </Button>
+        </ModalFooter>
+      </Modal>
     </div>
   )
 }

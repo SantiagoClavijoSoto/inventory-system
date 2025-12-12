@@ -97,16 +97,24 @@ export function ProductSearch({ onSelectProduct, onError }: ProductSearchProps) 
           }
         }
 
-        // Text search
-        const data = await productApi.getAll({
-          search: term,
-          is_active: true,
-          is_sellable: true,
-          page_size: 10,
-        })
-        setResults(data.results)
-        setShowResults(true)
-        setSelectedIndex(data.results.length > 0 ? 0 : -1)
+        // Text search with stock info for POS
+        if (currentBranch) {
+          const data = await productApi.searchForPOS(term, currentBranch.id)
+          setResults(data)
+          setShowResults(true)
+          setSelectedIndex(data.length > 0 ? 0 : -1)
+        } else {
+          // Fallback without branch - no stock info
+          const data = await productApi.getAll({
+            search: term,
+            is_active: true,
+            is_sellable: true,
+            page_size: 10,
+          })
+          setResults(data.results)
+          setShowResults(true)
+          setSelectedIndex(data.results.length > 0 ? 0 : -1)
+        }
       } catch (error: unknown) {
         const errorMsg = error instanceof Error ? error.message : 'Error buscando productos'
         onError?.(errorMsg)

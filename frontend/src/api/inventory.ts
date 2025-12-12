@@ -135,6 +135,15 @@ export const productApi = {
     return response.data
   },
 
+  searchForPOS: async (search: string, branchId: number) => {
+    const response = await apiClient.get<
+      (Product & { stock_in_branch: number; available_in_branch: number })[]
+    >('/products/search_pos/', {
+      params: { search, branch: branchId },
+    })
+    return response.data
+  },
+
   create: async (data: FormData | Partial<Product>) => {
     const config = data instanceof FormData
       ? { headers: { 'Content-Type': 'multipart/form-data' } }
