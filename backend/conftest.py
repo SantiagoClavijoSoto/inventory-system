@@ -99,7 +99,6 @@ def category(db):
     """Create a test category."""
     return Category.objects.create(
         name='Categoría Test',
-        code='CAT-TEST',
         description='Categoría para tests',
         is_active=True
     )
@@ -143,9 +142,7 @@ def branch_stock(db, branch, product):
     return BranchStock.objects.create(
         branch=branch,
         product=product,
-        quantity=100,
-        min_stock=10,
-        max_stock=500
+        quantity=100
     )
 
 
@@ -155,9 +152,7 @@ def second_branch_stock(db, branch, second_product):
     return BranchStock.objects.create(
         branch=branch,
         product=second_product,
-        quantity=50,
-        min_stock=5,
-        max_stock=200
+        quantity=50
     )
 
 
@@ -271,17 +266,82 @@ def open_shift(db, employee, branch):
     )
 
 
+# Permission fixtures for employees module
+@pytest.fixture
+def employees_view_permission(db):
+    """Create employees view permission."""
+    return Permission.objects.create(
+        code='employees:view',
+        name='Ver Empleados',
+        module='employees',
+        action='view'
+    )
+
+
+@pytest.fixture
+def employees_create_permission(db):
+    """Create employees create permission."""
+    return Permission.objects.create(
+        code='employees:create',
+        name='Crear Empleados',
+        module='employees',
+        action='create'
+    )
+
+
+@pytest.fixture
+def employees_edit_permission(db):
+    """Create employees edit permission."""
+    return Permission.objects.create(
+        code='employees:edit',
+        name='Editar Empleados',
+        module='employees',
+        action='edit'
+    )
+
+
+@pytest.fixture
+def employees_delete_permission(db):
+    """Create employees delete permission."""
+    return Permission.objects.create(
+        code='employees:delete',
+        name='Eliminar Empleados',
+        module='employees',
+        action='delete'
+    )
+
+
+@pytest.fixture
+def admin_role_with_employees_permissions(
+    admin_role,
+    employees_view_permission,
+    employees_create_permission,
+    employees_edit_permission,
+    employees_delete_permission
+):
+    """Admin role with all employees permissions."""
+    admin_role.permissions.add(
+        employees_view_permission,
+        employees_create_permission,
+        employees_edit_permission,
+        employees_delete_permission
+    )
+    return admin_role
+
+
 # API client aliases for test readability
 @pytest.fixture
-def authenticated_client(authenticated_admin_client):
-    """Alias for authenticated admin client."""
-    return authenticated_admin_client
+def authenticated_client(api_client, admin_user, admin_role_with_employees_permissions):
+    """Authenticated admin client with employees permissions."""
+    api_client.force_authenticate(user=admin_user)
+    return api_client
 
 
 @pytest.fixture
-def admin_client(authenticated_admin_client):
-    """Alias for authenticated admin client with admin permissions."""
-    return authenticated_admin_client
+def admin_client(api_client, admin_user, admin_role_with_employees_permissions):
+    """Authenticated admin client with full admin permissions."""
+    api_client.force_authenticate(user=admin_user)
+    return api_client
 
 
 @pytest.fixture
