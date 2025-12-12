@@ -19,6 +19,7 @@ interface AuthState {
   hasPermission: (permission: string) => boolean
   hasModulePermission: (module: string) => boolean
   canAccessBranch: (branchId: number) => boolean
+  isPlatformAdmin: () => boolean
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -50,6 +51,8 @@ export const useAuthStore = create<AuthState>()(
           await authApi.logout()
         } finally {
           clearTokens()
+          // Clear theme storage on logout
+          localStorage.removeItem('theme-storage')
           set({
             user: null,
             isAuthenticated: false,
@@ -107,6 +110,11 @@ export const useAuthStore = create<AuthState>()(
         if (user.role?.role_type === 'admin') return true
         return user.allowed_branches?.includes(branchId) ?? false
       },
+
+      isPlatformAdmin: () => {
+        const { user } = get()
+        return user?.is_platform_admin ?? false
+      },
     }),
     {
       name: 'auth-storage',
@@ -126,4 +134,9 @@ export const usePermission = (permission: string): boolean => {
 // Hook for checking module access
 export const useModulePermission = (module: string): boolean => {
   return useAuthStore((state) => state.hasModulePermission(module))
+}
+
+// Hook for checking if user is platform admin (superadmin)
+export const useIsPlatformAdmin = (): boolean => {
+  return useAuthStore((state) => state.isPlatformAdmin())
 }

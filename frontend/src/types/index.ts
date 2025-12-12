@@ -38,8 +38,127 @@ export interface Branch {
   closing_time?: string
   full_address?: string
   employee_count?: number
+  // Branding fields
+  store_name?: string
+  display_name?: string
+  logo?: string
+  logo_url?: string
+  favicon?: string
+  favicon_url?: string
+  primary_color?: string
+  secondary_color?: string
+  accent_color?: string
+  // Business config
+  tax_rate?: number
+  currency?: string
+  currency_symbol?: string
+  receipt_header?: string
+  receipt_footer?: string
   created_at: string
   updated_at: string
+}
+
+export interface BranchBranding {
+  id: number
+  store_name?: string
+  display_name: string
+  logo?: string
+  logo_url?: string
+  favicon?: string
+  favicon_url?: string
+  primary_color: string
+  secondary_color: string
+  accent_color?: string
+  tax_rate: number
+  currency: string
+  currency_symbol: string
+}
+
+// Company and Subscription Types (Multi-tenant)
+export type CompanyPlan = 'free' | 'basic' | 'professional' | 'enterprise'
+export type SubscriptionStatus = 'trial' | 'active' | 'past_due' | 'cancelled' | 'suspended'
+export type BillingCycle = 'monthly' | 'quarterly' | 'annual'
+
+export interface Subscription {
+  id: number
+  plan: CompanyPlan
+  plan_display: string
+  status: SubscriptionStatus
+  status_display: string
+  billing_cycle: BillingCycle
+  billing_cycle_display: string
+  start_date: string
+  next_payment_date?: string
+  trial_ends_at?: string
+  amount: number
+  currency: string
+  notes?: string
+  is_active: boolean
+  days_until_payment?: number
+  created_at: string
+  updated_at: string
+}
+
+export interface Company {
+  id: number
+  name: string
+  slug: string
+  legal_name?: string
+  tax_id?: string
+  // Branding
+  logo?: string
+  primary_color: string
+  secondary_color: string
+  // Contact
+  email: string
+  phone?: string
+  website?: string
+  address?: string
+  // Plan & Limits
+  plan: CompanyPlan
+  max_branches: number
+  max_users: number
+  max_products: number
+  // Status
+  is_active: boolean
+  owner?: number
+  owner_email?: string
+  // Computed
+  branch_count?: number
+  user_count?: number
+  product_count?: number
+  plan_limits?: {
+    max_branches: number
+    max_users: number
+    max_products: number
+    current_branches: number
+    current_users: number
+    current_products: number
+  }
+  // Subscription (from related model)
+  subscription?: Subscription
+  subscription_status?: SubscriptionStatus
+  subscription_status_display?: string
+  next_payment_date?: string
+  // Timestamps
+  created_at: string
+  updated_at: string
+}
+
+export interface CompanyListItem {
+  id: number
+  name: string
+  slug: string
+  email: string
+  plan: CompanyPlan
+  is_active: boolean
+  branch_count: number
+  user_count: number
+  primary_color: string
+  created_at: string
+  subscription_status?: SubscriptionStatus
+  subscription_status_display?: string
+  next_payment_date?: string
 }
 
 export interface User {
@@ -59,6 +178,7 @@ export interface User {
   default_branch?: number
   allowed_branches?: number[]
   is_active: boolean
+  is_platform_admin?: boolean
   created_at: string
   updated_at: string
   last_login?: string
@@ -324,24 +444,233 @@ export interface CartItem {
   customPrice?: number
 }
 
-// Employee Types (for later phases)
+// Employee Types
+export type EmploymentType = 'full_time' | 'part_time' | 'contract' | 'temporary'
+export type EmployeeStatus = 'active' | 'inactive' | 'on_leave' | 'terminated'
+
+export interface EmployeeUser {
+  id: number
+  email: string
+  first_name: string
+  last_name: string
+  full_name: string
+  phone?: string
+  avatar?: string
+}
+
+export interface EmployeeBranch {
+  id: number
+  name: string
+  code: string
+}
+
 export interface Employee {
   id: number
-  user: User
-  employee_number: string
-  branch: Branch
+  employee_code: string
+  user: EmployeeUser
+  branch: EmployeeBranch
+  full_name: string
   position: string
+  department?: string
+  employment_type: EmploymentType
+  status: EmployeeStatus
   hire_date: string
-  is_active: boolean
+  termination_date?: string
+  salary?: number
+  hourly_rate?: number
+  emergency_contact_name?: string
+  emergency_contact_phone?: string
+  address?: string
+  tax_id?: string
+  social_security_number?: string
+  notes?: string
+  years_of_service?: number
+  is_clocked_in: boolean
+  current_shift?: Shift | null
+  created_at: string
+  updated_at: string
 }
 
 export interface Shift {
   id: number
-  employee: Employee
-  branch: Branch
+  employee: number
+  employee_name: string
+  branch: number
+  branch_name: string
   clock_in: string
   clock_out?: string
+  break_start?: string
+  break_end?: string
+  total_hours?: number
+  break_hours?: number
+  worked_hours?: number
   notes?: string
+  is_manual_entry: boolean
+  adjusted_by?: number
+  is_complete: boolean
+  created_at: string
+}
+
+export interface CreateEmployeeRequest {
+  email: string
+  first_name: string
+  last_name: string
+  phone?: string
+  password: string
+  role_id?: number
+  branch_id: number
+  position: string
+  department?: string
+  employment_type?: EmploymentType
+  hire_date: string
+  salary?: number
+  hourly_rate?: number
+  emergency_contact_name?: string
+  emergency_contact_phone?: string
+  address?: string
+  tax_id?: string
+  social_security_number?: string
+  notes?: string
+}
+
+export interface UpdateEmployeeRequest {
+  first_name?: string
+  last_name?: string
+  phone?: string
+  branch?: number
+  position?: string
+  department?: string
+  employment_type?: EmploymentType
+  status?: EmployeeStatus
+  termination_date?: string
+  salary?: number
+  hourly_rate?: number
+  emergency_contact_name?: string
+  emergency_contact_phone?: string
+  address?: string
+  tax_id?: string
+  social_security_number?: string
+  notes?: string
+}
+
+export interface EmployeeStats {
+  total_shifts: number
+  total_hours: number
+  total_sales: number
+  total_revenue: number
+  average_sale: number
+  period_start: string
+  period_end: string
+}
+
+export interface ShiftSummary {
+  date: string
+  total_employees: number
+  total_hours: number
+  shifts_count: number
+}
+
+// Supplier Types
+export interface Supplier {
+  id: number
+  name: string
+  code: string
+  contact_name?: string
+  email?: string
+  phone?: string
+  mobile?: string
+  address?: string
+  city?: string
+  state?: string
+  postal_code?: string
+  country: string
+  tax_id?: string
+  website?: string
+  notes?: string
+  payment_terms: number
+  credit_limit: number
+  is_active: boolean
+  full_address?: string
+  purchase_orders_count?: number
+  total_purchases?: number
+  created_at: string
+  updated_at: string
+}
+
+export type PurchaseOrderStatus = 'draft' | 'pending' | 'approved' | 'ordered' | 'partial' | 'received' | 'cancelled'
+
+export interface PurchaseOrderItem {
+  id: number
+  product: {
+    id: number
+    name: string
+    sku: string
+    barcode?: string
+  }
+  product_id?: number
+  quantity_ordered: number
+  quantity_received: number
+  unit_price: number
+  subtotal: number
+  is_fully_received: boolean
+  pending_quantity: number
+}
+
+export interface PurchaseOrder {
+  id: number
+  order_number: string
+  supplier: number | Supplier
+  supplier_name?: string
+  branch: number | EmployeeBranch
+  branch_name?: string
+  status: PurchaseOrderStatus
+  order_date?: string
+  expected_date?: string
+  received_date?: string
+  subtotal: number
+  tax: number
+  total: number
+  notes?: string
+  created_by?: number
+  created_by_name?: string
+  approved_by?: number
+  approved_by_name?: string
+  received_by?: number
+  received_by_name?: string
+  items?: PurchaseOrderItem[]
+  items_count?: number
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateSupplierRequest {
+  name: string
+  code: string
+  contact_name?: string
+  email?: string
+  phone?: string
+  mobile?: string
+  address?: string
+  city?: string
+  state?: string
+  postal_code?: string
+  country?: string
+  tax_id?: string
+  website?: string
+  notes?: string
+  payment_terms?: number
+  credit_limit?: number
+  is_active?: boolean
+}
+
+export interface SupplierStats {
+  total_orders: number
+  total_amount: number
+  pending_orders: number
+  ordered_count: number
+  partial_count: number
+  received_orders: number
+  cancelled_orders: number
 }
 
 // Dashboard Types

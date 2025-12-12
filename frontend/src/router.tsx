@@ -9,6 +9,13 @@ import { Login } from '@/pages/auth/Login'
 import { Dashboard } from '@/pages/dashboard/Dashboard'
 import { Products } from '@/pages/inventory/Products'
 import { POS } from '@/pages/pos/POS'
+import { Employees } from '@/pages/employees/Employees'
+import { Suppliers } from '@/pages/suppliers/Suppliers'
+import { Reports } from '@/pages/reports/Reports'
+import { Alerts } from '@/pages/alerts/Alerts'
+import { Branches } from '@/pages/branches/Branches'
+import { Settings } from '@/pages/settings/Settings'
+import { Clients } from '@/pages/clients/Clients'
 
 // Error Pages
 import { NotFound } from '@/pages/errors/NotFound'
@@ -90,7 +97,7 @@ export const router = createBrowserRouter([
         path: 'employees',
         element: (
           <ProtectedRoute requiredModule="employees">
-            <PlaceholderPage title="Empleados" />
+            <Employees />
           </ProtectedRoute>
         ),
       },
@@ -106,7 +113,7 @@ export const router = createBrowserRouter([
         path: 'suppliers',
         element: (
           <ProtectedRoute requiredModule="suppliers">
-            <PlaceholderPage title="Proveedores" />
+            <Suppliers />
           </ProtectedRoute>
         ),
       },
@@ -114,7 +121,7 @@ export const router = createBrowserRouter([
         path: 'reports',
         element: (
           <ProtectedRoute requiredModule="reports">
-            <PlaceholderPage title="Reportes" />
+            <Reports />
           </ProtectedRoute>
         ),
       },
@@ -122,7 +129,7 @@ export const router = createBrowserRouter([
         path: 'alerts',
         element: (
           <ProtectedRoute requiredModule="alerts">
-            <PlaceholderPage title="Alertas" />
+            <Alerts />
           </ProtectedRoute>
         ),
       },
@@ -130,7 +137,15 @@ export const router = createBrowserRouter([
         path: 'branches',
         element: (
           <ProtectedRoute requiredModule="branches">
-            <PlaceholderPage title="Sucursales" />
+            <Branches />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'clients',
+        element: (
+          <ProtectedRoute requiredModule="companies">
+            <Clients />
           </ProtectedRoute>
         ),
       },
@@ -138,7 +153,7 @@ export const router = createBrowserRouter([
         path: 'settings',
         element: (
           <ProtectedRoute requiredModule="settings">
-            <PlaceholderPage title="Configuración" />
+            <Settings />
           </ProtectedRoute>
         ),
       },
