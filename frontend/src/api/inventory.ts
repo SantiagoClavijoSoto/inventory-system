@@ -53,40 +53,40 @@ interface ProductFilters {
 // Category API
 export const categoryApi = {
   getAll: async () => {
-    const response = await apiClient.get<Category[]>('/inventory/categories/')
+    const response = await apiClient.get<Category[]>('/categories/')
     return response.data
   },
 
   getTree: async () => {
-    const response = await apiClient.get<Category[]>('/inventory/categories/tree/')
+    const response = await apiClient.get<Category[]>('/categories/tree/')
     return response.data
   },
 
   getRoot: async () => {
-    const response = await apiClient.get<Category[]>('/inventory/categories/root/')
+    const response = await apiClient.get<Category[]>('/categories/root/')
     return response.data
   },
 
   getById: async (id: number) => {
-    const response = await apiClient.get<Category>(`/inventory/categories/${id}/`)
+    const response = await apiClient.get<Category>(`/categories/${id}/`)
     return response.data
   },
 
   create: async (data: Partial<Category>) => {
-    const response = await apiClient.post<Category>('/inventory/categories/', data)
+    const response = await apiClient.post<Category>('/categories/', data)
     return response.data
   },
 
   update: async (id: number, data: Partial<Category>) => {
     const response = await apiClient.patch<Category>(
-      `/inventory/categories/${id}/`,
+      `/categories/${id}/`,
       data
     )
     return response.data
   },
 
   delete: async (id: number) => {
-    await apiClient.delete(`/inventory/categories/${id}/`)
+    await apiClient.delete(`/categories/${id}/`)
   },
 }
 
@@ -94,20 +94,20 @@ export const categoryApi = {
 export const productApi = {
   getAll: async (filters?: ProductFilters) => {
     const response = await apiClient.get<ProductListResponse>(
-      '/inventory/products/',
+      '/products/',
       { params: filters }
     )
     return response.data
   },
 
   getById: async (id: number) => {
-    const response = await apiClient.get<Product>(`/inventory/products/${id}/`)
+    const response = await apiClient.get<Product>(`/products/${id}/`)
     return response.data
   },
 
   getByBarcode: async (code: string, branchId: number) => {
     const response = await apiClient.get<BarcodeSearchResponse>(
-      `/inventory/products/barcode/${code}/`,
+      `/products/barcode/${code}/`,
       { params: { branch_id: branchId } }
     )
     return response.data
@@ -115,21 +115,21 @@ export const productApi = {
 
   getStock: async (productId: number) => {
     const response = await apiClient.get<BranchStock[]>(
-      `/inventory/products/${productId}/stock/`
+      `/products/${productId}/stock/`
     )
     return response.data
   },
 
   getMovements: async (productId: number, branchId?: number) => {
     const response = await apiClient.get<StockMovement[]>(
-      `/inventory/products/${productId}/movements/`,
+      `/products/${productId}/movements/`,
       { params: branchId ? { branch_id: branchId } : undefined }
     )
     return response.data
   },
 
   getLowStock: async (branchId?: number) => {
-    const response = await apiClient.get<any[]>('/inventory/products/low_stock/', {
+    const response = await apiClient.get<any[]>('/products/low_stock/', {
       params: branchId ? { branch_id: branchId } : undefined,
     })
     return response.data
@@ -140,7 +140,7 @@ export const productApi = {
       ? { headers: { 'Content-Type': 'multipart/form-data' } }
       : {}
     const response = await apiClient.post<Product>(
-      '/inventory/products/',
+      '/products/',
       data,
       config
     )
@@ -152,7 +152,7 @@ export const productApi = {
       ? { headers: { 'Content-Type': 'multipart/form-data' } }
       : {}
     const response = await apiClient.patch<Product>(
-      `/inventory/products/${id}/`,
+      `/products/${id}/`,
       data,
       config
     )
@@ -160,7 +160,7 @@ export const productApi = {
   },
 
   delete: async (id: number) => {
-    await apiClient.delete(`/inventory/products/${id}/`)
+    await apiClient.delete(`/products/${id}/`)
   },
 }
 
@@ -168,7 +168,7 @@ export const productApi = {
 export const stockApi = {
   adjust: async (data: StockAdjustmentRequest) => {
     const response = await apiClient.post<StockMovement>(
-      '/inventory/stock/adjust/',
+      '/stock/adjust/',
       data
     )
     return response.data
@@ -178,13 +178,13 @@ export const stockApi = {
     const response = await apiClient.post<{
       outgoing: StockMovement
       incoming: StockMovement
-    }>('/inventory/stock/transfer/', data)
+    }>('/stock/transfer/', data)
     return response.data
   },
 
   getByBranch: async (branchId: number) => {
     const response = await apiClient.get<BranchStock[]>(
-      '/inventory/stock/by_branch/',
+      '/stock/by_branch/',
       { params: { branch_id: branchId } }
     )
     return response.data
@@ -204,7 +204,7 @@ export const movementApi = {
     page_size?: number
   }) => {
     const response = await apiClient.get<PaginatedResponse<StockMovement>>(
-      '/inventory/movements/',
+      '/movements/',
       { params: filters }
     )
     return response.data
@@ -212,7 +212,7 @@ export const movementApi = {
 
   getById: async (id: number) => {
     const response = await apiClient.get<StockMovement>(
-      `/inventory/movements/${id}/`
+      `/movements/${id}/`
     )
     return response.data
   },
@@ -221,28 +221,28 @@ export const movementApi = {
 // Stock Alerts API
 export const alertApi = {
   getAll: async () => {
-    const response = await apiClient.get('/inventory/alerts/')
+    const response = await apiClient.get('/alerts/')
     return response.data
   },
 
   getActive: async (branchId?: number) => {
-    const response = await apiClient.get('/inventory/alerts/active/', {
+    const response = await apiClient.get('/alerts/active/', {
       params: branchId ? { branch_id: branchId } : undefined,
     })
     return response.data
   },
 
   create: async (data: any) => {
-    const response = await apiClient.post('/inventory/alerts/', data)
+    const response = await apiClient.post('/alerts/', data)
     return response.data
   },
 
   update: async (id: number, data: any) => {
-    const response = await apiClient.patch(`/inventory/alerts/${id}/`, data)
+    const response = await apiClient.patch(`/alerts/${id}/`, data)
     return response.data
   },
 
   delete: async (id: number) => {
-    await apiClient.delete(`/inventory/alerts/${id}/`)
+    await apiClient.delete(`/alerts/${id}/`)
   },
 }
