@@ -198,6 +198,56 @@ class ProductViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
 
         return Response(low_stock_items)
 
+    @action(detail=False, methods=['get'])
+    def search_pos(self, request):
+        """
+        Search products for POS with stock info.
+        Returns products with branch-specific stock levels.
+        """
+        branch_id = request.query_params.get('branch')
+        search = request.query_params.get('search', '').strip()
+
+        if not branch_id:
+            return Response(
+                {'error': 'branch es requerido'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not search:
+            return Response([])
+
+        # Search by name, SKU, or barcode
+        products = self.get_queryset().filter(
+            is_active=True
+        ).filter(
+            Q(name__icontains=search) |
+            Q(sku__icontains=search) |
+            Q(barcode__icontains=search)
+        )[:20]
+
+        # Build response with stock info for each product
+        result = []
+        for product in products:
+            try:
+                branch_stock = BranchStock.objects.get(
+                    product=product,
+                    branch_id=branch_id
+                )
+                stock_quantity = branch_stock.quantity
+                available_quantity = branch_stock.available_quantity
+            except BranchStock.DoesNotExist:
+                stock_quantity = 0
+                available_quantity = 0
+
+            serializer = ProductDetailSerializer(product)
+            result.append({
+                **serializer.data,
+                'stock_in_branch': stock_quantity,
+                'available_in_branch': available_quantity,
+            })
+
+        return Response(result)
+
 
 class StockViewSet(viewsets.ViewSet):
     """
