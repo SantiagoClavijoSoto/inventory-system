@@ -13,7 +13,7 @@ class TestLoginEndpoint:
 
     def test_login_success(self, api_client, admin_user):
         """Test successful login."""
-        response = api_client.post('/api/auth/login/', {
+        response = api_client.post('/api/v1/auth/login/', {
             'email': 'admin@test.com',
             'password': 'testpass123'
         })
@@ -26,16 +26,16 @@ class TestLoginEndpoint:
 
     def test_login_invalid_password(self, api_client, admin_user):
         """Test login with wrong password."""
-        response = api_client.post('/api/auth/login/', {
+        response = api_client.post('/api/v1/auth/login/', {
             'email': 'admin@test.com',
             'password': 'wrongpassword'
         })
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
-    def test_login_invalid_email(self, api_client):
+    def test_login_invalid_email(self, api_client, db):
         """Test login with non-existent email."""
-        response = api_client.post('/api/auth/login/', {
+        response = api_client.post('/api/v1/auth/login/', {
             'email': 'nonexistent@test.com',
             'password': 'testpass123'
         })
@@ -53,7 +53,7 @@ class TestLoginEndpoint:
             is_active=False
         )
 
-        response = api_client.post('/api/auth/login/', {
+        response = api_client.post('/api/v1/auth/login/', {
             'email': 'inactive@test.com',
             'password': 'testpass123'
         })
@@ -62,7 +62,7 @@ class TestLoginEndpoint:
 
     def test_login_missing_fields(self, api_client):
         """Test login with missing fields."""
-        response = api_client.post('/api/auth/login/', {
+        response = api_client.post('/api/v1/auth/login/', {
             'email': 'test@test.com'
         })
 
@@ -75,14 +75,14 @@ class TestLogoutEndpoint:
     def test_logout_success(self, authenticated_admin_client, admin_user, api_client):
         """Test successful logout."""
         # First login to get tokens
-        login_response = api_client.post('/api/auth/login/', {
+        login_response = api_client.post('/api/v1/auth/login/', {
             'email': 'admin@test.com',
             'password': 'testpass123'
         })
         refresh_token = login_response.data['refresh']
 
         # Then logout
-        response = authenticated_admin_client.post('/api/auth/logout/', {
+        response = authenticated_admin_client.post('/api/v1/auth/logout/', {
             'refresh': refresh_token
         })
 
@@ -91,7 +91,7 @@ class TestLogoutEndpoint:
 
     def test_logout_requires_authentication(self, api_client):
         """Test that logout requires authentication."""
-        response = api_client.post('/api/auth/logout/', {
+        response = api_client.post('/api/v1/auth/logout/', {
             'refresh': 'some_token'
         })
 
@@ -99,7 +99,7 @@ class TestLogoutEndpoint:
 
     def test_logout_invalid_token(self, authenticated_admin_client):
         """Test logout with invalid token."""
-        response = authenticated_admin_client.post('/api/auth/logout/', {
+        response = authenticated_admin_client.post('/api/v1/auth/logout/', {
             'refresh': 'invalid_token'
         })
 
@@ -111,7 +111,7 @@ class TestMeEndpoint:
 
     def test_get_current_user(self, authenticated_admin_client, admin_user):
         """Test getting current user profile."""
-        response = authenticated_admin_client.get('/api/auth/me/')
+        response = authenticated_admin_client.get('/api/v1/auth/me/')
 
         assert response.status_code == status.HTTP_200_OK
         assert response.data['email'] == 'admin@test.com'
@@ -120,7 +120,7 @@ class TestMeEndpoint:
 
     def test_update_current_user(self, authenticated_admin_client, admin_user):
         """Test updating current user profile."""
-        response = authenticated_admin_client.patch('/api/auth/me/', {
+        response = authenticated_admin_client.patch('/api/v1/auth/me/', {
             'first_name': 'Updated',
             'phone': '555-9999'
         })
@@ -132,7 +132,7 @@ class TestMeEndpoint:
 
     def test_me_requires_authentication(self, api_client):
         """Test that /me requires authentication."""
-        response = api_client.get('/api/auth/me/')
+        response = api_client.get('/api/v1/auth/me/')
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
@@ -142,7 +142,7 @@ class TestChangePasswordEndpoint:
 
     def test_change_password_success(self, authenticated_admin_client, admin_user):
         """Test successful password change."""
-        response = authenticated_admin_client.post('/api/auth/change-password/', {
+        response = authenticated_admin_client.post('/api/v1/auth/change-password/', {
             'current_password': 'testpass123',
             'new_password': 'newpass456!',
             'new_password_confirm': 'newpass456!'
@@ -154,7 +154,7 @@ class TestChangePasswordEndpoint:
 
     def test_change_password_wrong_current(self, authenticated_admin_client):
         """Test change password with wrong current password."""
-        response = authenticated_admin_client.post('/api/auth/change-password/', {
+        response = authenticated_admin_client.post('/api/v1/auth/change-password/', {
             'current_password': 'wrongpassword',
             'new_password': 'newpass456!',
             'new_password_confirm': 'newpass456!'
@@ -164,7 +164,7 @@ class TestChangePasswordEndpoint:
 
     def test_change_password_mismatch(self, authenticated_admin_client):
         """Test change password with mismatched new passwords."""
-        response = authenticated_admin_client.post('/api/auth/change-password/', {
+        response = authenticated_admin_client.post('/api/v1/auth/change-password/', {
             'current_password': 'testpass123',
             'new_password': 'newpass456!',
             'new_password_confirm': 'different789!'
@@ -174,7 +174,7 @@ class TestChangePasswordEndpoint:
 
     def test_change_password_requires_authentication(self, api_client):
         """Test that change password requires authentication."""
-        response = api_client.post('/api/auth/change-password/', {
+        response = api_client.post('/api/v1/auth/change-password/', {
             'current_password': 'testpass123',
             'new_password': 'newpass456!',
             'new_password_confirm': 'newpass456!'
@@ -214,14 +214,14 @@ class TestUserViewSet:
 
     def test_list_users(self, authenticated_admin_client, admin_with_permissions):
         """Test listing users."""
-        response = authenticated_admin_client.get('/api/auth/users/')
+        response = authenticated_admin_client.get('/api/v1/auth/users/')
 
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data) >= 1
 
     def test_create_user(self, authenticated_admin_client, admin_with_permissions, admin_role):
         """Test creating a new user."""
-        response = authenticated_admin_client.post('/api/auth/users/', {
+        response = authenticated_admin_client.post('/api/v1/auth/users/', {
             'email': 'newuser@test.com',
             'password': 'newpass123!',
             'password_confirm': 'newpass123!',
@@ -235,7 +235,7 @@ class TestUserViewSet:
 
     def test_create_user_password_mismatch(self, authenticated_admin_client, admin_with_permissions):
         """Test creating user with mismatched passwords."""
-        response = authenticated_admin_client.post('/api/auth/users/', {
+        response = authenticated_admin_client.post('/api/v1/auth/users/', {
             'email': 'newuser@test.com',
             'password': 'newpass123!',
             'password_confirm': 'different123!',
@@ -247,14 +247,14 @@ class TestUserViewSet:
 
     def test_retrieve_user(self, authenticated_admin_client, admin_with_permissions, admin_user):
         """Test retrieving a specific user."""
-        response = authenticated_admin_client.get(f'/api/auth/users/{admin_user.id}/')
+        response = authenticated_admin_client.get(f'/api/v1/auth/users/{admin_user.id}/')
 
         assert response.status_code == status.HTTP_200_OK
         assert response.data['email'] == admin_user.email
 
     def test_update_user(self, authenticated_admin_client, admin_with_permissions, admin_user):
         """Test updating a user."""
-        response = authenticated_admin_client.patch(f'/api/auth/users/{admin_user.id}/', {
+        response = authenticated_admin_client.patch(f'/api/v1/auth/users/{admin_user.id}/', {
             'first_name': 'Updated Name'
         })
 
@@ -272,7 +272,7 @@ class TestUserViewSet:
             role=admin_role
         )
 
-        response = authenticated_admin_client.delete(f'/api/auth/users/{user_to_delete.id}/')
+        response = authenticated_admin_client.delete(f'/api/v1/auth/users/{user_to_delete.id}/')
 
         assert response.status_code == status.HTTP_204_NO_CONTENT
         assert not User.objects.filter(email='todelete@test.com').exists()
@@ -288,7 +288,7 @@ class TestUserViewSet:
             is_active=False
         )
 
-        response = authenticated_admin_client.post(f'/api/auth/users/{inactive_user.id}/activate/')
+        response = authenticated_admin_client.post(f'/api/v1/auth/users/{inactive_user.id}/activate/')
 
         assert response.status_code == status.HTTP_200_OK
         inactive_user.refresh_from_db()
@@ -305,7 +305,7 @@ class TestUserViewSet:
             is_active=True
         )
 
-        response = authenticated_admin_client.post(f'/api/auth/users/{active_user.id}/deactivate/')
+        response = authenticated_admin_client.post(f'/api/v1/auth/users/{active_user.id}/deactivate/')
 
         assert response.status_code == status.HTTP_200_OK
         active_user.refresh_from_db()
@@ -321,7 +321,7 @@ class TestUserViewSet:
             role=admin_role
         )
 
-        response = authenticated_admin_client.post(f'/api/auth/users/{user.id}/reset_password/', {
+        response = authenticated_admin_client.post(f'/api/v1/auth/users/{user.id}/reset_password/', {
             'new_password': 'newpass456!'
         })
 
@@ -331,7 +331,7 @@ class TestUserViewSet:
 
     def test_reset_password_missing_password(self, authenticated_admin_client, admin_with_permissions, admin_user):
         """Test reset password without providing new password."""
-        response = authenticated_admin_client.post(f'/api/auth/users/{admin_user.id}/reset_password/', {})
+        response = authenticated_admin_client.post(f'/api/v1/auth/users/{admin_user.id}/reset_password/', {})
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
@@ -367,14 +367,14 @@ class TestRoleViewSet:
 
     def test_list_roles(self, authenticated_admin_client, admin_with_permissions, admin_role):
         """Test listing roles."""
-        response = authenticated_admin_client.get('/api/auth/roles/')
+        response = authenticated_admin_client.get('/api/v1/auth/roles/')
 
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data) >= 1
 
     def test_create_role(self, authenticated_admin_client, admin_with_permissions):
         """Test creating a new role."""
-        response = authenticated_admin_client.post('/api/auth/roles/', {
+        response = authenticated_admin_client.post('/api/v1/auth/roles/', {
             'name': 'New Role',
             'role_type': 'viewer',
             'description': 'A new test role'
@@ -392,7 +392,7 @@ class TestRoleViewSet:
             action='view'
         )
 
-        response = authenticated_admin_client.post('/api/auth/roles/', {
+        response = authenticated_admin_client.post('/api/v1/auth/roles/', {
             'name': 'Role With Perms',
             'role_type': 'viewer',
             'permission_ids': [perm.id]
@@ -404,14 +404,14 @@ class TestRoleViewSet:
 
     def test_retrieve_role(self, authenticated_admin_client, admin_with_permissions, admin_role):
         """Test retrieving a specific role."""
-        response = authenticated_admin_client.get(f'/api/auth/roles/{admin_role.id}/')
+        response = authenticated_admin_client.get(f'/api/v1/auth/roles/{admin_role.id}/')
 
         assert response.status_code == status.HTTP_200_OK
         assert response.data['name'] == admin_role.name
 
     def test_update_role(self, authenticated_admin_client, admin_with_permissions, admin_role):
         """Test updating a role."""
-        response = authenticated_admin_client.patch(f'/api/auth/roles/{admin_role.id}/', {
+        response = authenticated_admin_client.patch(f'/api/v1/auth/roles/{admin_role.id}/', {
             'description': 'Updated description'
         })
 
@@ -423,14 +423,14 @@ class TestRoleViewSet:
         """Test deleting a role."""
         role = Role.objects.create(name='To Delete', role_type='viewer')
 
-        response = authenticated_admin_client.delete(f'/api/auth/roles/{role.id}/')
+        response = authenticated_admin_client.delete(f'/api/v1/auth/roles/{role.id}/')
 
         assert response.status_code == status.HTTP_204_NO_CONTENT
         assert not Role.objects.filter(name='To Delete').exists()
 
     def test_setup_defaults(self, authenticated_admin_client, admin_with_permissions, db):
         """Test creating default roles and permissions."""
-        response = authenticated_admin_client.post('/api/auth/roles/setup_defaults/')
+        response = authenticated_admin_client.post('/api/v1/auth/roles/setup_defaults/')
 
         assert response.status_code == status.HTTP_200_OK
         # Verify default roles were created
@@ -464,7 +464,7 @@ class TestPermissionListView:
         Permission.objects.create(code='test:view', name='Test', module='inventory', action='view')
         Permission.objects.create(code='test:create', name='Test 2', module='inventory', action='create')
 
-        response = authenticated_admin_client.get('/api/auth/permissions/')
+        response = authenticated_admin_client.get('/api/v1/auth/permissions/')
 
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data) >= 2
@@ -474,15 +474,17 @@ class TestPermissionListView:
         Permission.objects.create(code='inv:view', name='Inv', module='inventory', action='view')
         Permission.objects.create(code='sales:view', name='Sales', module='sales', action='view')
 
-        response = authenticated_admin_client.get('/api/auth/permissions/?module=inventory')
+        response = authenticated_admin_client.get('/api/v1/auth/permissions/?module=inventory')
 
         assert response.status_code == status.HTTP_200_OK
-        for perm in response.data:
+        # Response is paginated, so access results list
+        results = response.data.get('results', response.data)
+        for perm in results:
             assert perm['module'] == 'inventory'
 
     def test_permissions_requires_authentication(self, api_client):
         """Test that permissions list requires authentication."""
-        response = api_client.get('/api/auth/permissions/')
+        response = api_client.get('/api/v1/auth/permissions/')
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
@@ -493,14 +495,14 @@ class TestTokenRefresh:
     def test_refresh_token(self, api_client, admin_user):
         """Test refreshing access token."""
         # First login to get tokens
-        login_response = api_client.post('/api/auth/login/', {
+        login_response = api_client.post('/api/v1/auth/login/', {
             'email': 'admin@test.com',
             'password': 'testpass123'
         })
         refresh_token = login_response.data['refresh']
 
         # Refresh the token
-        response = api_client.post('/api/auth/refresh/', {
+        response = api_client.post('/api/v1/auth/refresh/', {
             'refresh': refresh_token
         })
 
@@ -509,7 +511,7 @@ class TestTokenRefresh:
 
     def test_refresh_invalid_token(self, api_client):
         """Test refresh with invalid token."""
-        response = api_client.post('/api/auth/refresh/', {
+        response = api_client.post('/api/v1/auth/refresh/', {
             'refresh': 'invalid_token'
         })
 

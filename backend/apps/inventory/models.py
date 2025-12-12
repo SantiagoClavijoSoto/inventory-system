@@ -10,6 +10,17 @@ class Category(TimestampMixin, SoftDeleteMixin, models.Model):
     Product categories with hierarchical structure (parent-child).
     Allows organizing products into nested categories.
     """
+    # Multi-tenant: company association
+    # NOTE: nullable=True for initial migration, should be required in production
+    company = models.ForeignKey(
+        'companies.Company',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='categories',
+        verbose_name='Empresa'
+    )
+
     name = models.CharField(max_length=100, verbose_name='Nombre')
     description = models.TextField(blank=True, verbose_name='Descripción')
     parent = models.ForeignKey(
@@ -70,6 +81,17 @@ class Product(TimestampMixin, SoftDeleteMixin, models.Model):
         ('box', 'Caja'),
         ('pack', 'Paquete'),
     ]
+
+    # Multi-tenant: company association
+    # NOTE: nullable=True for initial migration, should be required in production
+    company = models.ForeignKey(
+        'companies.Company',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='products',
+        verbose_name='Empresa'
+    )
 
     # Basic info
     name = models.CharField(max_length=200, verbose_name='Nombre')

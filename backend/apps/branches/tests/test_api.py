@@ -40,14 +40,14 @@ class TestBranchViewSet:
 
     def test_list_branches(self, authenticated_admin_client, admin_with_permissions, branch):
         """Test listing branches."""
-        response = authenticated_admin_client.get('/api/branches/')
+        response = authenticated_admin_client.get('/api/v1/branches/')
 
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data) >= 1
 
     def test_create_branch(self, authenticated_admin_client, admin_with_permissions):
         """Test creating a new branch."""
-        response = authenticated_admin_client.post('/api/branches/', {
+        response = authenticated_admin_client.post('/api/v1/branches/', {
             'name': 'New Branch',
             'code': 'new',
             'address': '123 New St',
@@ -61,7 +61,7 @@ class TestBranchViewSet:
 
     def test_create_branch_code_uppercase(self, authenticated_admin_client, admin_with_permissions):
         """Test that branch code is automatically uppercased."""
-        response = authenticated_admin_client.post('/api/branches/', {
+        response = authenticated_admin_client.post('/api/v1/branches/', {
             'name': 'Lowercase Test',
             'code': 'lowercase',
             'is_active': True
@@ -72,7 +72,7 @@ class TestBranchViewSet:
 
     def test_retrieve_branch(self, authenticated_admin_client, admin_with_permissions, branch):
         """Test retrieving a specific branch."""
-        response = authenticated_admin_client.get(f'/api/branches/{branch.id}/')
+        response = authenticated_admin_client.get(f'/api/v1/branches/{branch.id}/')
 
         assert response.status_code == status.HTTP_200_OK
         assert response.data['name'] == branch.name
@@ -80,7 +80,7 @@ class TestBranchViewSet:
 
     def test_update_branch(self, authenticated_admin_client, admin_with_permissions, branch):
         """Test updating a branch."""
-        response = authenticated_admin_client.patch(f'/api/branches/{branch.id}/', {
+        response = authenticated_admin_client.patch(f'/api/v1/branches/{branch.id}/', {
             'name': 'Updated Branch Name'
         })
 
@@ -96,7 +96,7 @@ class TestBranchViewSet:
             is_active=True
         )
 
-        response = authenticated_admin_client.delete(f'/api/branches/{new_branch.id}/')
+        response = authenticated_admin_client.delete(f'/api/v1/branches/{new_branch.id}/')
 
         assert response.status_code == status.HTTP_204_NO_CONTENT
         new_branch.refresh_from_db()
@@ -111,22 +111,24 @@ class TestBranchViewSet:
             is_active=True
         )
 
-        response = authenticated_admin_client.get('/api/branches/?city=Ciudad Test')
+        response = authenticated_admin_client.get('/api/v1/branches/?city=Ciudad Test')
 
         assert response.status_code == status.HTTP_200_OK
-        for b in response.data:
+        # Response is paginated, so access results list
+        results = response.data.get('results', response.data)
+        for b in results:
             assert b['city'] == 'Ciudad Test'
 
     def test_list_branches_search(self, authenticated_admin_client, admin_with_permissions, branch, db):
         """Test searching branches."""
-        response = authenticated_admin_client.get('/api/branches/?search=Test')
+        response = authenticated_admin_client.get('/api/v1/branches/?search=Test')
 
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data) >= 1
 
     def test_list_branches_requires_authentication(self, api_client):
         """Test that listing branches requires authentication."""
-        response = api_client.get('/api/branches/')
+        response = api_client.get('/api/v1/branches/')
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
@@ -135,7 +137,7 @@ class TestBranchViewSet:
         # Only give view permission
         cashier_role.permissions.add(branches_permission)
 
-        response = authenticated_cashier_client.post('/api/branches/', {
+        response = authenticated_cashier_client.post('/api/v1/branches/', {
             'name': 'New Branch',
             'code': 'NEW'
         })
@@ -164,7 +166,7 @@ class TestBranchStatsAction:
 
     def test_get_branch_stats(self, authenticated_admin_client, admin_with_permissions, branch):
         """Test getting branch statistics."""
-        response = authenticated_admin_client.get(f'/api/branches/{branch.id}/stats/')
+        response = authenticated_admin_client.get(f'/api/v1/branches/{branch.id}/stats/')
 
         assert response.status_code == status.HTTP_200_OK
         assert 'total_products' in response.data
@@ -174,7 +176,7 @@ class TestBranchStatsAction:
 
     def test_stats_for_nonexistent_branch(self, authenticated_admin_client, admin_with_permissions):
         """Test getting stats for nonexistent branch."""
-        response = authenticated_admin_client.get('/api/branches/9999/stats/')
+        response = authenticated_admin_client.get('/api/v1/branches/9999/stats/')
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
@@ -200,7 +202,7 @@ class TestBranchSimpleAction:
 
     def test_get_simple_list(self, authenticated_admin_client, admin_with_permissions, branch):
         """Test getting simplified branch list."""
-        response = authenticated_admin_client.get('/api/branches/simple/')
+        response = authenticated_admin_client.get('/api/v1/branches/simple/')
 
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data) >= 1
@@ -219,7 +221,7 @@ class TestBranchSimpleAction:
             is_active=False
         )
 
-        response = authenticated_admin_client.get('/api/branches/simple/')
+        response = authenticated_admin_client.get('/api/v1/branches/simple/')
 
         assert response.status_code == status.HTTP_200_OK
         codes = [b['code'] for b in response.data]
@@ -248,11 +250,13 @@ class TestBranchAccessControl:
         cashier_user.allowed_branches.add(branch)
 
         api_client.force_authenticate(user=cashier_user)
-        response = api_client.get('/api/branches/')
+        response = api_client.get('/api/v1/branches/')
 
         assert response.status_code == status.HTTP_200_OK
         # Should only see the allowed branch
-        codes = [b['code'] for b in response.data]
+        # Response is paginated, so access results list
+        results = response.data.get('results', response.data)
+        codes = [b['code'] for b in results]
         assert branch.code in codes
 
     def test_admin_sees_all_branches(
@@ -264,10 +268,12 @@ class TestBranchAccessControl:
         admin_user.is_superuser = True
         admin_user.save()
 
-        response = authenticated_admin_client.get('/api/branches/')
+        response = authenticated_admin_client.get('/api/v1/branches/')
 
         assert response.status_code == status.HTTP_200_OK
-        codes = [b['code'] for b in response.data]
+        # Response is paginated, so access results list
+        results = response.data.get('results', response.data)
+        codes = [b['code'] for b in results]
         assert branch.code in codes
         assert second_branch.code in codes
 
@@ -306,17 +312,19 @@ class TestBranchMainBranchAPI:
         Branch.objects.create(name='Main', code='MAIN', is_main=True)
         Branch.objects.create(name='Not Main', code='NMAIN', is_main=False)
 
-        response = authenticated_admin_client.get('/api/branches/?is_main=true')
+        response = authenticated_admin_client.get('/api/v1/branches/?is_main=true')
 
         assert response.status_code == status.HTTP_200_OK
-        for b in response.data:
+        # Response is paginated, so access results list
+        results = response.data.get('results', response.data)
+        for b in results:
             assert b['is_main'] is True
 
     def test_create_main_branch_updates_others(self, authenticated_admin_client, admin_with_permissions, db):
         """Test that creating a main branch unsets others."""
         first = Branch.objects.create(name='First', code='F1', is_main=True)
 
-        response = authenticated_admin_client.post('/api/branches/', {
+        response = authenticated_admin_client.post('/api/v1/branches/', {
             'name': 'Second Main',
             'code': 'S2',
             'is_main': True

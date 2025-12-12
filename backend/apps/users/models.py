@@ -205,6 +205,24 @@ class User(AbstractUser, TimestampMixin):
         null=True,
         verbose_name='Avatar'
     )
+
+    # Multi-tenant: company association
+    # NULL company = SuperAdmin de plataforma
+    company = models.ForeignKey(
+        'companies.Company',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='users',
+        verbose_name='Empresa',
+        help_text='NULL para SuperAdmin de plataforma'
+    )
+    is_company_admin = models.BooleanField(
+        default=False,
+        verbose_name='Admin de empresa',
+        help_text='Puede gestionar toda su empresa'
+    )
+
     role = models.ForeignKey(
         Role,
         on_delete=models.SET_NULL,

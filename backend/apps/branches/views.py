@@ -3,7 +3,7 @@ Views for branches app.
 """
 from decimal import Decimal
 from django.utils import timezone
-from django.db.models import Sum, Count
+from django.db.models import Sum, Count, F
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -11,12 +11,14 @@ from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, extend_schema_view
 
 from apps.users.permissions import HasPermission
+from core.mixins import TenantQuerySetMixin
 from .models import Branch
 from .serializers import (
     BranchSerializer,
     BranchSimpleSerializer,
     BranchCreateSerializer,
     BranchStatsSerializer,
+    BranchBrandingSerializer,
 )
 
 
@@ -28,8 +30,8 @@ from .serializers import (
     partial_update=extend_schema(tags=['Sucursales']),
     destroy=extend_schema(tags=['Sucursales']),
 )
-class BranchViewSet(viewsets.ModelViewSet):
-    """ViewSet for branch management."""
+class BranchViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
+    """ViewSet for branch management. Auto-filtered by company."""
     queryset = Branch.active.all()
     permission_classes = [IsAuthenticated, HasPermission]
     required_permission = 'branches:view'
@@ -62,6 +64,10 @@ class BranchViewSet(viewsets.ModelViewSet):
 
         return queryset
 
+    def perform_destroy(self, instance):
+        """Soft delete the branch instead of hard delete."""
+        instance.soft_delete(user=self.request.user)
+
     @extend_schema(
         tags=['Sucursales'],
         responses={200: BranchStatsSerializer}
@@ -91,7 +97,7 @@ class BranchViewSet(viewsets.ModelViewSet):
             from apps.inventory.models import BranchStock
             stock_data = BranchStock.objects.filter(branch=branch).aggregate(
                 total_products=Count('id'),
-                total_value=Sum('quantity' * 'product__cost_price')
+                total_value=Sum(F('quantity') * F('product__cost_price'))
             )
             stats['total_products'] = stock_data.get('total_products', 0) or 0
         except ImportError:
@@ -99,21 +105,22 @@ class BranchViewSet(viewsets.ModelViewSet):
 
         try:
             from apps.sales.models import Sale
+            # Filter by status='completed' instead of is_voided (which is a property, not a field)
             sales_today = Sale.objects.filter(
                 branch=branch,
                 created_at__date=today,
-                is_voided=False
+                status='completed'
             ).aggregate(
                 count=Count('id'),
-                total=Sum('total_amount')
+                total=Sum('total')  # Field is 'total', not 'total_amount'
             )
             sales_month = Sale.objects.filter(
                 branch=branch,
                 created_at__date__gte=first_of_month,
-                is_voided=False
+                status='completed'
             ).aggregate(
                 count=Count('id'),
-                total=Sum('total_amount')
+                total=Sum('total')
             )
             stats['sales_today'] = sales_today.get('count', 0) or 0
             stats['sales_amount_today'] = sales_today.get('total') or Decimal('0.00')
@@ -131,4 +138,23 @@ class BranchViewSet(viewsets.ModelViewSet):
         """Get simple list of branches for dropdowns."""
         queryset = self.get_queryset().filter(is_active=True)
         serializer = BranchSimpleSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+    @extend_schema(
+        tags=['Sucursales'],
+        responses={200: BranchBrandingSerializer}
+    )
+    @action(detail=True, methods=['get', 'patch'], url_path='branding')
+    def branding(self, request, pk=None):
+        """Get or update branch branding/theming information."""
+        branch = self.get_object()
+
+        if request.method == 'PATCH':
+            serializer = BranchBrandingSerializer(branch, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data)
+
+        # GET
+        serializer = BranchBrandingSerializer(branch)
         return Response(serializer.data)

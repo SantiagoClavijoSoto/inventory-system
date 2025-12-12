@@ -140,9 +140,10 @@ class TestEmployeeServiceStats:
 
     def test_get_employee_stats(self, db, employee, branch):
         """Test getting employee statistics."""
-        # Create some completed shifts
-        clock_in = timezone.now() - timedelta(hours=8)
-        clock_out = timezone.now()
+        # Create some completed shifts - use localtime for proper date matching
+        now = timezone.localtime()
+        clock_in = now - timedelta(hours=8)
+        clock_out = now
 
         for i in range(3):
             Shift.objects.create(
@@ -160,10 +161,11 @@ class TestEmployeeServiceStats:
 
     def test_get_employee_stats_date_range(self, db, employee, branch):
         """Test getting stats with specific date range."""
-        # Create shifts across different dates
-        today = date.today()
-        clock_in = timezone.now() - timedelta(hours=8)
-        clock_out = timezone.now()
+        # Create shifts across different dates - use localtime for proper date matching
+        now = timezone.localtime()
+        today = now.date()
+        clock_in = now - timedelta(hours=8)
+        clock_out = now
 
         # Shift within range
         Shift.objects.create(
@@ -316,9 +318,10 @@ class TestShiftServiceDailySummary:
 
     def test_get_daily_summary(self, db, employee, branch):
         """Test getting daily shift summary."""
-        # Create completed shifts for today
-        clock_in = timezone.now() - timedelta(hours=8)
-        clock_out = timezone.now()
+        # Create completed shifts for today - use localtime for proper date matching
+        now = timezone.localtime()
+        clock_in = now - timedelta(hours=8)
+        clock_out = now
 
         Shift.objects.create(
             employee=employee,
@@ -329,7 +332,7 @@ class TestShiftServiceDailySummary:
 
         summary = ShiftService.get_daily_summary(branch=branch)
 
-        assert summary['date'] == date.today()
+        assert summary['date'] == now.date()
         assert summary['total_employees'] >= 1
         assert summary['shifts_count'] >= 1
         assert summary['total_hours'] >= Decimal('7.0')
@@ -381,9 +384,11 @@ class TestShiftServiceGetShifts:
 
     def test_get_employee_shifts_date_filter(self, db, employee, branch):
         """Test getting shifts with date filter."""
-        today = date.today()
-        clock_in = timezone.now() - timedelta(hours=8)
-        clock_out = timezone.now()
+        # Use localtime for proper date matching with Django's timezone
+        now = timezone.localtime()
+        today = now.date()
+        clock_in = now - timedelta(hours=8)
+        clock_out = now
 
         Shift.objects.create(
             employee=employee,

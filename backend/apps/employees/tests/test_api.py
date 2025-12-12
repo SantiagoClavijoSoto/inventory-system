@@ -18,39 +18,39 @@ class TestEmployeeViewSetList:
 
     def test_list_employees_success(self, authenticated_client, employee):
         """Test listing employees."""
-        response = authenticated_client.get('/api/employees/')
+        response = authenticated_client.get('/api/v1/employees/')
 
         assert response.status_code == status.HTTP_200_OK
         assert isinstance(response.data, list) or 'results' in response.data
 
     def test_list_employees_filter_by_branch(self, authenticated_client, employee, branch):
         """Test filtering employees by branch."""
-        response = authenticated_client.get(f'/api/employees/?branch={branch.id}')
+        response = authenticated_client.get(f'/api/v1/employees/?branch={branch.id}')
 
         assert response.status_code == status.HTTP_200_OK
 
     def test_list_employees_filter_by_status(self, authenticated_client, employee):
         """Test filtering employees by status."""
-        response = authenticated_client.get('/api/employees/?status=active')
+        response = authenticated_client.get('/api/v1/employees/?status=active')
 
         assert response.status_code == status.HTTP_200_OK
 
     def test_list_employees_filter_by_employment_type(self, authenticated_client, employee):
         """Test filtering employees by employment type."""
-        response = authenticated_client.get('/api/employees/?employment_type=full_time')
+        response = authenticated_client.get('/api/v1/employees/?employment_type=full_time')
 
         assert response.status_code == status.HTTP_200_OK
 
     def test_list_employees_search(self, authenticated_client, employee):
         """Test searching employees."""
-        response = authenticated_client.get('/api/employees/?search=test')
+        response = authenticated_client.get('/api/v1/employees/?search=test')
 
         assert response.status_code == status.HTTP_200_OK
 
     def test_list_employees_unauthenticated(self, db):
         """Test that unauthenticated request is rejected."""
         client = APIClient()
-        response = client.get('/api/employees/')
+        response = client.get('/api/v1/employees/')
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
@@ -60,7 +60,7 @@ class TestEmployeeViewSetRetrieve:
 
     def test_retrieve_employee_success(self, authenticated_client, employee):
         """Test retrieving a single employee."""
-        response = authenticated_client.get(f'/api/employees/{employee.id}/')
+        response = authenticated_client.get(f'/api/v1/employees/{employee.id}/')
 
         assert response.status_code == status.HTTP_200_OK
         assert response.data['id'] == employee.id
@@ -70,7 +70,7 @@ class TestEmployeeViewSetRetrieve:
     def test_retrieve_employee_includes_current_shift(self, authenticated_client, open_shift):
         """Test that employee detail includes current shift info."""
         employee = open_shift.employee
-        response = authenticated_client.get(f'/api/employees/{employee.id}/')
+        response = authenticated_client.get(f'/api/v1/employees/{employee.id}/')
 
         assert response.status_code == status.HTTP_200_OK
         assert 'current_shift' in response.data
@@ -78,7 +78,7 @@ class TestEmployeeViewSetRetrieve:
 
     def test_retrieve_employee_not_found(self, authenticated_client, db):
         """Test retrieving non-existent employee."""
-        response = authenticated_client.get('/api/employees/99999/')
+        response = authenticated_client.get('/api/v1/employees/99999/')
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
@@ -111,7 +111,7 @@ class TestEmployeeViewSetCreate:
 
     def test_create_employee_success(self, admin_client, valid_employee_data):
         """Test creating an employee."""
-        response = admin_client.post('/api/employees/', valid_employee_data)
+        response = admin_client.post('/api/v1/employees/', valid_employee_data)
 
         assert response.status_code == status.HTTP_201_CREATED
         assert response.data['user']['email'] == 'newemployee@test.com'
@@ -132,7 +132,7 @@ class TestEmployeeViewSetCreate:
             'notes': 'New hire',
         })
 
-        response = admin_client.post('/api/employees/', valid_employee_data)
+        response = admin_client.post('/api/v1/employees/', valid_employee_data)
 
         assert response.status_code == status.HTTP_201_CREATED
 
@@ -140,7 +140,7 @@ class TestEmployeeViewSetCreate:
         """Test creating employee with duplicate email fails."""
         valid_employee_data['email'] = employee.user.email
 
-        response = admin_client.post('/api/employees/', valid_employee_data)
+        response = admin_client.post('/api/v1/employees/', valid_employee_data)
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert 'email' in response.data
@@ -149,7 +149,7 @@ class TestEmployeeViewSetCreate:
         """Test creating employee with invalid branch fails."""
         valid_employee_data['branch_id'] = 99999
 
-        response = admin_client.post('/api/employees/', valid_employee_data)
+        response = admin_client.post('/api/v1/employees/', valid_employee_data)
 
         assert response.status_code in [status.HTTP_400_BAD_REQUEST, status.HTTP_404_NOT_FOUND]
 
@@ -157,7 +157,7 @@ class TestEmployeeViewSetCreate:
         """Test creating employee without required fields fails."""
         data = {'email': 'incomplete@test.com'}
 
-        response = admin_client.post('/api/employees/', data)
+        response = admin_client.post('/api/v1/employees/', data)
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
@@ -169,7 +169,7 @@ class TestEmployeeViewSetUpdate:
         """Test updating an employee."""
         data = {'position': 'Senior Cajero', 'department': 'Ventas'}
 
-        response = admin_client.patch(f'/api/employees/{employee.id}/', data)
+        response = admin_client.patch(f'/api/v1/employees/{employee.id}/', data)
 
         assert response.status_code == status.HTTP_200_OK
         employee.refresh_from_db()
@@ -179,7 +179,7 @@ class TestEmployeeViewSetUpdate:
         """Test updating employee's user fields."""
         data = {'first_name': 'Updated', 'last_name': 'Name', 'phone': '555-9999'}
 
-        response = admin_client.patch(f'/api/employees/{employee.id}/', data)
+        response = admin_client.patch(f'/api/v1/employees/{employee.id}/', data)
 
         assert response.status_code == status.HTTP_200_OK
         employee.user.refresh_from_db()
@@ -191,7 +191,7 @@ class TestEmployeeViewSetDelete:
 
     def test_delete_employee_soft_deletes(self, admin_client, employee):
         """Test deleting an employee performs soft delete."""
-        response = admin_client.delete(f'/api/employees/{employee.id}/')
+        response = admin_client.delete(f'/api/v1/employees/{employee.id}/')
 
         assert response.status_code == status.HTTP_204_NO_CONTENT
         employee.refresh_from_db()
@@ -208,7 +208,7 @@ class TestEmployeeViewSetTerminate:
             'reason': 'Voluntary resignation'
         }
 
-        response = admin_client.post(f'/api/employees/{employee.id}/terminate/', data)
+        response = admin_client.post(f'/api/v1/employees/{employee.id}/terminate/', data)
 
         assert response.status_code == status.HTTP_200_OK
         employee.refresh_from_db()
@@ -216,7 +216,7 @@ class TestEmployeeViewSetTerminate:
 
     def test_terminate_employee_default_date(self, admin_client, employee):
         """Test terminating without date uses today."""
-        response = admin_client.post(f'/api/employees/{employee.id}/terminate/', {'reason': 'Test'})
+        response = admin_client.post(f'/api/v1/employees/{employee.id}/terminate/', {'reason': 'Test'})
 
         assert response.status_code == status.HTTP_200_OK
         employee.refresh_from_db()
@@ -227,7 +227,7 @@ class TestEmployeeViewSetTerminate:
         employee.status = 'terminated'
         employee.save()
 
-        response = admin_client.post(f'/api/employees/{employee.id}/terminate/', {})
+        response = admin_client.post(f'/api/v1/employees/{employee.id}/terminate/', {})
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
@@ -247,7 +247,7 @@ class TestEmployeeViewSetStats:
             clock_out=clock_out,
         )
 
-        response = authenticated_client.get(f'/api/employees/{employee.id}/stats/')
+        response = authenticated_client.get(f'/api/v1/employees/{employee.id}/stats/')
 
         assert response.status_code == status.HTTP_200_OK
         assert 'total_shifts' in response.data
@@ -259,7 +259,7 @@ class TestEmployeeViewSetStats:
         date_from = today - timedelta(days=30)
 
         response = authenticated_client.get(
-            f'/api/employees/{employee.id}/stats/?date_from={date_from}&date_to={today}'
+            f'/api/v1/employees/{employee.id}/stats/?date_from={date_from}&date_to={today}'
         )
 
         assert response.status_code == status.HTTP_200_OK
@@ -278,7 +278,7 @@ class TestEmployeeViewSetShifts:
             clock_out=timezone.now(),
         )
 
-        response = authenticated_client.get(f'/api/employees/{employee.id}/shifts/')
+        response = authenticated_client.get(f'/api/v1/employees/{employee.id}/shifts/')
 
         assert response.status_code == status.HTTP_200_OK
         assert isinstance(response.data, list)
@@ -289,32 +289,32 @@ class TestShiftViewSetList:
 
     def test_list_shifts_success(self, authenticated_client, open_shift):
         """Test listing shifts."""
-        response = authenticated_client.get('/api/shifts/')
+        response = authenticated_client.get('/api/v1/shifts/')
 
         assert response.status_code == status.HTTP_200_OK
 
     def test_list_shifts_filter_by_branch(self, authenticated_client, open_shift, branch):
         """Test filtering shifts by branch."""
-        response = authenticated_client.get(f'/api/shifts/?branch={branch.id}')
+        response = authenticated_client.get(f'/api/v1/shifts/?branch={branch.id}')
 
         assert response.status_code == status.HTTP_200_OK
 
     def test_list_shifts_filter_by_employee(self, authenticated_client, open_shift):
         """Test filtering shifts by employee."""
-        response = authenticated_client.get(f'/api/shifts/?employee={open_shift.employee.id}')
+        response = authenticated_client.get(f'/api/v1/shifts/?employee={open_shift.employee.id}')
 
         assert response.status_code == status.HTTP_200_OK
 
     def test_list_shifts_filter_by_date(self, authenticated_client, open_shift):
         """Test filtering shifts by date range."""
         today = date.today()
-        response = authenticated_client.get(f'/api/shifts/?date_from={today}&date_to={today}')
+        response = authenticated_client.get(f'/api/v1/shifts/?date_from={today}&date_to={today}')
 
         assert response.status_code == status.HTTP_200_OK
 
     def test_list_shifts_filter_complete(self, authenticated_client, open_shift):
         """Test filtering by complete status."""
-        response = authenticated_client.get('/api/shifts/?is_complete=false')
+        response = authenticated_client.get('/api/v1/shifts/?is_complete=false')
 
         assert response.status_code == status.HTTP_200_OK
 
@@ -335,7 +335,7 @@ class TestShiftViewSetCreate:
             'notes': 'Manual entry'
         }
 
-        response = admin_client.post('/api/shifts/', data)
+        response = admin_client.post('/api/v1/shifts/', data)
 
         assert response.status_code == status.HTTP_201_CREATED
         assert response.data['is_manual_entry'] is True
@@ -346,7 +346,7 @@ class TestShiftViewSetClockIn:
 
     def test_clock_in_success(self, employee_client, employee):
         """Test clocking in successfully."""
-        response = employee_client.post('/api/shifts/clock_in/', {})
+        response = employee_client.post('/api/v1/shifts/clock_in/', {})
 
         assert response.status_code == status.HTTP_201_CREATED
         assert 'clock_in' in response.data
@@ -354,20 +354,20 @@ class TestShiftViewSetClockIn:
 
     def test_clock_in_at_specific_branch(self, employee_client, employee, second_branch):
         """Test clocking in at a specific branch."""
-        response = employee_client.post('/api/shifts/clock_in/', {'branch_id': second_branch.id})
+        response = employee_client.post('/api/v1/shifts/clock_in/', {'branch_id': second_branch.id})
 
         assert response.status_code == status.HTTP_201_CREATED
         assert response.data['branch'] == second_branch.id
 
     def test_clock_in_already_clocked_in(self, employee_client, open_shift):
         """Test clocking in when already clocked in fails."""
-        response = employee_client.post('/api/shifts/clock_in/', {})
+        response = employee_client.post('/api/v1/shifts/clock_in/', {})
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_clock_in_no_employee_profile(self, authenticated_client, db):
         """Test clock in without employee profile fails."""
-        response = authenticated_client.post('/api/shifts/clock_in/', {})
+        response = authenticated_client.post('/api/v1/shifts/clock_in/', {})
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert 'error' in response.data
@@ -378,7 +378,7 @@ class TestShiftViewSetClockOut:
 
     def test_clock_out_success(self, employee_client, open_shift):
         """Test clocking out successfully."""
-        response = employee_client.post('/api/shifts/clock_out/', {'notes': 'End of shift'})
+        response = employee_client.post('/api/v1/shifts/clock_out/', {'notes': 'End of shift'})
 
         assert response.status_code == status.HTTP_200_OK
         assert response.data['clock_out'] is not None
@@ -386,13 +386,13 @@ class TestShiftViewSetClockOut:
 
     def test_clock_out_not_clocked_in(self, employee_client, employee):
         """Test clocking out when not clocked in fails."""
-        response = employee_client.post('/api/shifts/clock_out/', {})
+        response = employee_client.post('/api/v1/shifts/clock_out/', {})
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_clock_out_no_employee_profile(self, authenticated_client, db):
         """Test clock out without employee profile fails."""
-        response = authenticated_client.post('/api/shifts/clock_out/', {})
+        response = authenticated_client.post('/api/v1/shifts/clock_out/', {})
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
@@ -402,14 +402,14 @@ class TestShiftViewSetBreaks:
 
     def test_start_break_success(self, employee_client, open_shift):
         """Test starting a break successfully."""
-        response = employee_client.post('/api/shifts/start_break/', {})
+        response = employee_client.post('/api/v1/shifts/start_break/', {})
 
         assert response.status_code == status.HTTP_200_OK
         assert response.data['break_start'] is not None
 
     def test_start_break_no_shift(self, employee_client, employee):
         """Test starting break without shift fails."""
-        response = employee_client.post('/api/shifts/start_break/', {})
+        response = employee_client.post('/api/v1/shifts/start_break/', {})
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
@@ -418,7 +418,7 @@ class TestShiftViewSetBreaks:
         open_shift.break_start = timezone.now()
         open_shift.save()
 
-        response = employee_client.post('/api/shifts/start_break/', {})
+        response = employee_client.post('/api/v1/shifts/start_break/', {})
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
@@ -427,14 +427,14 @@ class TestShiftViewSetBreaks:
         open_shift.break_start = timezone.now() - timedelta(minutes=30)
         open_shift.save()
 
-        response = employee_client.post('/api/shifts/end_break/', {})
+        response = employee_client.post('/api/v1/shifts/end_break/', {})
 
         assert response.status_code == status.HTTP_200_OK
         assert response.data['break_end'] is not None
 
     def test_end_break_not_on_break(self, employee_client, open_shift):
         """Test ending break when not on break fails."""
-        response = employee_client.post('/api/shifts/end_break/', {})
+        response = employee_client.post('/api/v1/shifts/end_break/', {})
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
@@ -444,14 +444,14 @@ class TestShiftViewSetCurrent:
 
     def test_get_current_shift(self, employee_client, open_shift):
         """Test getting current shift."""
-        response = employee_client.get('/api/shifts/current/')
+        response = employee_client.get('/api/v1/shifts/current/')
 
         assert response.status_code == status.HTTP_200_OK
         assert response.data['id'] == open_shift.id
 
     def test_get_current_shift_none(self, employee_client, employee):
         """Test getting current shift when none exists."""
-        response = employee_client.get('/api/shifts/current/')
+        response = employee_client.get('/api/v1/shifts/current/')
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
         assert 'message' in response.data
@@ -470,7 +470,7 @@ class TestShiftViewSetDailySummary:
             clock_out=timezone.now(),
         )
 
-        response = authenticated_client.get(f'/api/shifts/daily_summary/?branch={branch.id}')
+        response = authenticated_client.get(f'/api/v1/shifts/daily_summary/?branch={branch.id}')
 
         assert response.status_code == status.HTTP_200_OK
         assert 'date' in response.data
@@ -483,19 +483,26 @@ class TestShiftViewSetDailySummary:
         yesterday = date.today() - timedelta(days=1)
 
         response = authenticated_client.get(
-            f'/api/shifts/daily_summary/?branch={branch.id}&date={yesterday}'
+            f'/api/v1/shifts/daily_summary/?branch={branch.id}&date={yesterday}'
         )
 
         assert response.status_code == status.HTTP_200_OK
         assert response.data['date'] == str(yesterday)
 
-    def test_get_daily_summary_no_branch(self, authenticated_client, db):
+    def test_get_daily_summary_no_branch(self, api_client, db, admin_role_with_employees_permissions):
         """Test daily summary without branch fails."""
-        # Remove default branch from user
-        user = User.objects.get(email='admin@test.com')
-        user.default_branch = None
-        user.save()
+        # Create a user without default branch
+        user = User.objects.create_user(
+            email='nobranch@test.com',
+            password='testpass123',
+            first_name='No',
+            last_name='Branch',
+            role=admin_role_with_employees_permissions,
+            default_branch=None,
+            is_active=True
+        )
+        api_client.force_authenticate(user=user)
 
-        response = authenticated_client.get('/api/shifts/daily_summary/')
+        response = api_client.get('/api/v1/shifts/daily_summary/')
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST

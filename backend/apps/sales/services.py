@@ -304,13 +304,22 @@ class SaleService:
             Dictionary with sales statistics
         """
         from django.db.models import Sum, Count, Avg
+        from datetime import datetime, time, timedelta
 
         if date is None:
-            date = timezone.now().date()
+            date = timezone.localtime().date()
+
+        # Use date range filter for MySQL timezone compatibility
+        # Convert date to timezone-aware datetime range
+        start_datetime = timezone.make_aware(
+            datetime.combine(date, time.min)
+        )
+        end_datetime = start_datetime + timedelta(days=1)
 
         sales = Sale.objects.filter(
             branch=branch,
-            created_at__date=date,
+            created_at__gte=start_datetime,
+            created_at__lt=end_datetime,
             status='completed'
         )
 
@@ -333,7 +342,8 @@ class SaleService:
         # Get voided sales
         voided_count = Sale.objects.filter(
             branch=branch,
-            voided_at__date=date,
+            voided_at__gte=start_datetime,
+            voided_at__lt=end_datetime,
             status='voided'
         ).count()
 

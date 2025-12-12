@@ -11,6 +11,7 @@ from datetime import datetime
 
 from apps.users.permissions import HasPermission
 from apps.branches.models import Branch
+from core.mixins import TenantQuerySetMixin
 from .models import Employee, Shift
 from .serializers import (
     EmployeeListSerializer,
@@ -27,11 +28,12 @@ from .serializers import (
 from .services import EmployeeService, ShiftService
 
 
-class EmployeeViewSet(viewsets.ModelViewSet):
+class EmployeeViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
     """
     ViewSet for managing employees.
+    Auto-filtered by company via TenantQuerySetMixin (through branch).
 
-    list: Get all employees (filtered by branch)
+    list: Get all employees (filtered by branch/company)
     retrieve: Get employee details with current shift info
     create: Create new employee with user account
     update: Update employee information
@@ -42,6 +44,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     """
     queryset = Employee.active_objects.select_related('user', 'branch')
     permission_classes = [IsAuthenticated]
+    tenant_field = 'branch__company'  # Filter through branch's company
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -246,11 +249,12 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
-class ShiftViewSet(viewsets.ModelViewSet):
+class ShiftViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
     """
     ViewSet for managing shifts.
+    Auto-filtered by company via TenantQuerySetMixin (through branch).
 
-    list: Get all shifts (filtered)
+    list: Get all shifts (filtered by company/branch)
     retrieve: Get shift details
     create: Create manual shift entry
     clock_in: Clock in current user
@@ -262,6 +266,7 @@ class ShiftViewSet(viewsets.ModelViewSet):
     queryset = Shift.objects.select_related('employee', 'employee__user', 'branch')
     serializer_class = ShiftSerializer
     permission_classes = [IsAuthenticated]
+    tenant_field = 'branch__company'  # Filter through branch's company
 
     def get_queryset(self):
         queryset = super().get_queryset()

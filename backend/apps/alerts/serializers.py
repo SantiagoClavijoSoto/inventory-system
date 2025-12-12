@@ -202,6 +202,7 @@ class UserAlertPreferenceSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserAlertPreference
         fields = [
+            'id',
             'receive_low_stock',
             'receive_out_of_stock',
             'receive_cash_difference',

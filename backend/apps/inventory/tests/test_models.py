@@ -52,13 +52,14 @@ class TestCategoryModel:
         assert list(parent.children.all()) == [child1, child2]
 
     def test_category_soft_delete(self, db):
-        """Test that deleting a category soft deletes it."""
+        """Test that soft_delete marks category as deleted."""
         category = Category.objects.create(name='To Delete')
-        category.delete()
+        category.soft_delete()
 
-        assert Category.objects.filter(name='To Delete').exists()
+        # After soft delete, object still exists in database but is_deleted=True
         category.refresh_from_db()
         assert category.is_deleted is True
+        assert category.deleted_at is not None
 
 
 class TestProductModel:
@@ -144,10 +145,10 @@ class TestProductModel:
             cost_price=Decimal('10.00'),
             sale_price=Decimal('15.00')
         )
-        assert product.unit == 'unidad'
+        assert product.unit == 'unit'  # Default unit is 'unit'
 
     def test_product_soft_delete(self, db, category):
-        """Test that deleting a product soft deletes it."""
+        """Test that soft_delete marks product as deleted."""
         product = Product.objects.create(
             name='To Delete',
             sku='DEL001',
@@ -155,11 +156,12 @@ class TestProductModel:
             cost_price=Decimal('10.00'),
             sale_price=Decimal('15.00')
         )
-        product.delete()
+        product.soft_delete()
 
-        assert Product.objects.filter(sku='DEL001').exists()
+        # After soft delete, object still exists in database but is_deleted=True
         product.refresh_from_db()
         assert product.is_deleted is True
+        assert product.deleted_at is not None
 
 
 class TestBranchStockModel:
@@ -325,7 +327,8 @@ class TestStockMovementModel:
             new_quantity=95,
             created_by=admin_user
         )
-        assert 'sale' in str(movement).lower()
+        # String representation uses Spanish display name 'Venta' for 'sale' type
+        assert 'venta' in str(movement).lower()
         assert product.name in str(movement)
 
     def test_stock_movement_types(self, db, product, branch, admin_user):

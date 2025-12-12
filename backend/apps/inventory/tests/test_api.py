@@ -45,14 +45,14 @@ class TestCategoryViewSet:
 
     def test_list_categories(self, authenticated_admin_client, admin_with_permissions, category):
         """Test listing categories."""
-        response = authenticated_admin_client.get('/api/inventory/categories/')
+        response = authenticated_admin_client.get('/api/v1/categories/')
 
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data) >= 1
 
     def test_create_category(self, authenticated_admin_client, admin_with_permissions):
         """Test creating a new category."""
-        response = authenticated_admin_client.post('/api/inventory/categories/', {
+        response = authenticated_admin_client.post('/api/v1/categories/', {
             'name': 'New Category',
             'description': 'New category description'
         })
@@ -62,14 +62,14 @@ class TestCategoryViewSet:
 
     def test_retrieve_category(self, authenticated_admin_client, admin_with_permissions, category):
         """Test retrieving a specific category."""
-        response = authenticated_admin_client.get(f'/api/inventory/categories/{category.id}/')
+        response = authenticated_admin_client.get(f'/api/v1/categories/{category.id}/')
 
         assert response.status_code == status.HTTP_200_OK
         assert response.data['name'] == category.name
 
     def test_update_category(self, authenticated_admin_client, admin_with_permissions, category):
         """Test updating a category."""
-        response = authenticated_admin_client.patch(f'/api/inventory/categories/{category.id}/', {
+        response = authenticated_admin_client.patch(f'/api/v1/categories/{category.id}/', {
             'name': 'Updated Category Name'
         })
 
@@ -81,7 +81,7 @@ class TestCategoryViewSet:
         """Test deleting a category (soft delete)."""
         new_category = Category.objects.create(name='To Delete')
 
-        response = authenticated_admin_client.delete(f'/api/inventory/categories/{new_category.id}/')
+        response = authenticated_admin_client.delete(f'/api/v1/categories/{new_category.id}/')
 
         assert response.status_code == status.HTTP_204_NO_CONTENT
         new_category.refresh_from_db()
@@ -92,7 +92,7 @@ class TestCategoryViewSet:
         Category.objects.create(name='Root Category', is_active=True)
         Category.objects.create(name='Another Category', is_active=True)
 
-        response = authenticated_admin_client.get('/api/inventory/categories/tree/')
+        response = authenticated_admin_client.get('/api/v1/categories/tree/')
 
         assert response.status_code == status.HTTP_200_OK
         assert isinstance(response.data, list)
@@ -102,7 +102,7 @@ class TestCategoryViewSet:
         parent = Category.objects.create(name='Parent', is_active=True)
         Category.objects.create(name='Child', parent=parent, is_active=True)
 
-        response = authenticated_admin_client.get('/api/inventory/categories/root/')
+        response = authenticated_admin_client.get('/api/v1/categories/root/')
 
         assert response.status_code == status.HTTP_200_OK
         names = [c['name'] for c in response.data]
@@ -111,7 +111,7 @@ class TestCategoryViewSet:
 
     def test_list_categories_requires_authentication(self, api_client):
         """Test that listing categories requires authentication."""
-        response = api_client.get('/api/inventory/categories/')
+        response = api_client.get('/api/v1/categories/')
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
@@ -166,14 +166,14 @@ class TestProductViewSet:
 
     def test_list_products(self, authenticated_admin_client, admin_with_permissions, product):
         """Test listing products."""
-        response = authenticated_admin_client.get('/api/inventory/products/')
+        response = authenticated_admin_client.get('/api/v1/products/')
 
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data) >= 1
 
     def test_create_product(self, authenticated_admin_client, admin_with_permissions, category):
         """Test creating a new product."""
-        response = authenticated_admin_client.post('/api/inventory/products/', {
+        response = authenticated_admin_client.post('/api/v1/products/', {
             'name': 'New Product',
             'sku': 'NEW001',
             'category': category.id,
@@ -186,7 +186,7 @@ class TestProductViewSet:
 
     def test_retrieve_product(self, authenticated_admin_client, admin_with_permissions, product):
         """Test retrieving a specific product."""
-        response = authenticated_admin_client.get(f'/api/inventory/products/{product.id}/')
+        response = authenticated_admin_client.get(f'/api/v1/products/{product.id}/')
 
         assert response.status_code == status.HTTP_200_OK
         assert response.data['name'] == product.name
@@ -194,7 +194,7 @@ class TestProductViewSet:
 
     def test_update_product(self, authenticated_admin_client, admin_with_permissions, product):
         """Test updating a product."""
-        response = authenticated_admin_client.patch(f'/api/inventory/products/{product.id}/', {
+        response = authenticated_admin_client.patch(f'/api/v1/products/{product.id}/', {
             'name': 'Updated Product Name'
         })
 
@@ -212,7 +212,7 @@ class TestProductViewSet:
             sale_price=Decimal('15.00')
         )
 
-        response = authenticated_admin_client.delete(f'/api/inventory/products/{new_product.id}/')
+        response = authenticated_admin_client.delete(f'/api/v1/products/{new_product.id}/')
 
         assert response.status_code == status.HTTP_204_NO_CONTENT
         new_product.refresh_from_db()
@@ -223,7 +223,7 @@ class TestProductViewSet:
         BranchStock.objects.create(product=product, branch=branch, quantity=50)
 
         response = authenticated_admin_client.get(
-            f'/api/inventory/products/barcode/{product.barcode}/?branch_id={branch.id}'
+            f'/api/v1/products/barcode/{product.barcode}/?branch_id={branch.id}'
         )
 
         assert response.status_code == status.HTTP_200_OK
@@ -232,13 +232,13 @@ class TestProductViewSet:
 
     def test_product_by_barcode_requires_branch(self, authenticated_admin_client, admin_with_permissions, product):
         """Test barcode search requires branch_id."""
-        response = authenticated_admin_client.get(f'/api/inventory/products/barcode/{product.barcode}/')
+        response = authenticated_admin_client.get(f'/api/v1/products/barcode/{product.barcode}/')
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_product_by_barcode_not_found(self, authenticated_admin_client, admin_with_permissions, branch):
         """Test barcode search with non-existent barcode."""
-        response = authenticated_admin_client.get(f'/api/inventory/products/barcode/9999999999999/?branch_id={branch.id}')
+        response = authenticated_admin_client.get(f'/api/v1/products/barcode/9999999999999/?branch_id={branch.id}')
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
@@ -247,7 +247,7 @@ class TestProductViewSet:
         BranchStock.objects.create(product=product, branch=branch, quantity=50)
         BranchStock.objects.create(product=product, branch=second_branch, quantity=30)
 
-        response = authenticated_admin_client.get(f'/api/inventory/products/{product.id}/stock/')
+        response = authenticated_admin_client.get(f'/api/v1/products/{product.id}/stock/')
 
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data) == 2
@@ -265,7 +265,7 @@ class TestProductViewSet:
             created_by=admin_user
         )
 
-        response = authenticated_admin_client.get(f'/api/inventory/products/{product.id}/movements/')
+        response = authenticated_admin_client.get(f'/api/v1/products/{product.id}/movements/')
 
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data) >= 1
@@ -283,7 +283,7 @@ class TestProductViewSet:
         )
         BranchStock.objects.create(product=product, branch=branch, quantity=5)
 
-        response = authenticated_admin_client.get('/api/inventory/products/low_stock/')
+        response = authenticated_admin_client.get('/api/v1/products/low_stock/')
 
         assert response.status_code == status.HTTP_200_OK
         skus = [item['product_sku'] for item in response.data]
@@ -291,17 +291,19 @@ class TestProductViewSet:
 
     def test_search_products(self, authenticated_admin_client, admin_with_permissions, product):
         """Test searching products."""
-        response = authenticated_admin_client.get('/api/inventory/products/?search=Test')
+        response = authenticated_admin_client.get('/api/v1/products/?search=Test')
 
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data) >= 1
 
     def test_filter_products_by_category(self, authenticated_admin_client, admin_with_permissions, product, category):
         """Test filtering products by category."""
-        response = authenticated_admin_client.get(f'/api/inventory/products/?category={category.id}')
+        response = authenticated_admin_client.get(f'/api/v1/products/?category={category.id}')
 
         assert response.status_code == status.HTTP_200_OK
-        for p in response.data:
+        # Response is paginated, so access results list
+        results = response.data.get('results', response.data)
+        for p in results:
             assert p['category'] == category.id
 
 
@@ -344,7 +346,7 @@ class TestStockViewSet:
         """Test manual stock adjustment - add."""
         BranchStock.objects.create(product=product, branch=branch, quantity=50)
 
-        response = authenticated_admin_client.post('/api/inventory/stock/adjust/', {
+        response = authenticated_admin_client.post('/api/v1/stock/adjust/', {
             'product_id': product.id,
             'branch_id': branch.id,
             'adjustment_type': 'add',
@@ -360,7 +362,7 @@ class TestStockViewSet:
         """Test manual stock adjustment - subtract."""
         BranchStock.objects.create(product=product, branch=branch, quantity=50)
 
-        response = authenticated_admin_client.post('/api/inventory/stock/adjust/', {
+        response = authenticated_admin_client.post('/api/v1/stock/adjust/', {
             'product_id': product.id,
             'branch_id': branch.id,
             'adjustment_type': 'subtract',
@@ -376,7 +378,7 @@ class TestStockViewSet:
         """Test manual stock adjustment - set."""
         BranchStock.objects.create(product=product, branch=branch, quantity=50)
 
-        response = authenticated_admin_client.post('/api/inventory/stock/adjust/', {
+        response = authenticated_admin_client.post('/api/v1/stock/adjust/', {
             'product_id': product.id,
             'branch_id': branch.id,
             'adjustment_type': 'set',
@@ -392,7 +394,7 @@ class TestStockViewSet:
         """Test stock transfer between branches."""
         BranchStock.objects.create(product=product, branch=branch, quantity=100)
 
-        response = authenticated_admin_client.post('/api/inventory/stock/transfer/', {
+        response = authenticated_admin_client.post('/api/v1/stock/transfer/', {
             'product_id': product.id,
             'from_branch_id': branch.id,
             'to_branch_id': second_branch.id,
@@ -412,7 +414,7 @@ class TestStockViewSet:
         """Test transfer to same branch fails."""
         BranchStock.objects.create(product=product, branch=branch, quantity=100)
 
-        response = authenticated_admin_client.post('/api/inventory/stock/transfer/', {
+        response = authenticated_admin_client.post('/api/v1/stock/transfer/', {
             'product_id': product.id,
             'from_branch_id': branch.id,
             'to_branch_id': branch.id,
@@ -425,14 +427,14 @@ class TestStockViewSet:
         """Test getting all stock for a branch."""
         BranchStock.objects.create(product=product, branch=branch, quantity=50)
 
-        response = authenticated_admin_client.get(f'/api/inventory/stock/by_branch/?branch_id={branch.id}')
+        response = authenticated_admin_client.get(f'/api/v1/stock/by_branch/?branch_id={branch.id}')
 
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data) >= 1
 
     def test_stock_by_branch_requires_branch_id(self, authenticated_admin_client, admin_with_permissions):
         """Test by_branch requires branch_id parameter."""
-        response = authenticated_admin_client.get('/api/inventory/stock/by_branch/')
+        response = authenticated_admin_client.get('/api/v1/stock/by_branch/')
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
@@ -484,7 +486,7 @@ class TestStockMovementViewSet:
             created_by=admin_user
         )
 
-        response = authenticated_admin_client.get('/api/inventory/movements/')
+        response = authenticated_admin_client.get('/api/v1/stock/movements/')
 
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data) >= 1
@@ -501,14 +503,14 @@ class TestStockMovementViewSet:
             created_by=admin_user
         )
 
-        response = authenticated_admin_client.get(f'/api/inventory/movements/{movement.id}/')
+        response = authenticated_admin_client.get(f'/api/v1/stock/movements/{movement.id}/')
 
         assert response.status_code == status.HTTP_200_OK
         assert response.data['movement_type'] == 'sale'
 
     def test_movements_are_read_only(self, authenticated_admin_client, admin_with_permissions, product, branch, admin_user):
         """Test that movements cannot be created directly via API."""
-        response = authenticated_admin_client.post('/api/inventory/movements/', {
+        response = authenticated_admin_client.post('/api/v1/stock/movements/', {
             'product': product.id,
             'branch': branch.id,
             'movement_type': 'purchase',
@@ -530,10 +532,12 @@ class TestStockMovementViewSet:
             created_by=admin_user
         )
 
-        response = authenticated_admin_client.get(f'/api/inventory/movements/?product={product.id}')
+        response = authenticated_admin_client.get(f'/api/v1/stock/movements/?product={product.id}')
 
         assert response.status_code == status.HTTP_200_OK
-        for m in response.data:
+        # Response is paginated, so access results list
+        results = response.data.get('results', response.data)
+        for m in results:
             assert m['product'] == product.id
 
 
@@ -583,14 +587,14 @@ class TestStockAlertViewSet:
             is_active=True
         )
 
-        response = authenticated_admin_client.get('/api/inventory/stock-alerts/')
+        response = authenticated_admin_client.get('/api/v1/stock/alerts/')
 
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data) >= 1
 
     def test_create_stock_alert(self, authenticated_admin_client, admin_with_permissions, product, branch):
         """Test creating a stock alert."""
-        response = authenticated_admin_client.post('/api/inventory/stock-alerts/', {
+        response = authenticated_admin_client.post('/api/v1/stock/alerts/', {
             'product': product.id,
             'branch': branch.id,
             'alert_type': 'low_stock',
@@ -605,7 +609,7 @@ class TestStockAlertViewSet:
         """Test getting active alerts (products below threshold)."""
         BranchStock.objects.create(product=product, branch=branch, quantity=5)  # Below min_stock of 10
 
-        response = authenticated_admin_client.get('/api/inventory/stock-alerts/active/')
+        response = authenticated_admin_client.get('/api/v1/stock/alerts/active/')
 
         assert response.status_code == status.HTTP_200_OK
         # Should find low stock alert
@@ -617,7 +621,7 @@ class TestStockAlertViewSet:
         BranchStock.objects.create(product=product, branch=branch, quantity=5)
         BranchStock.objects.create(product=product, branch=second_branch, quantity=100)
 
-        response = authenticated_admin_client.get(f'/api/inventory/stock-alerts/active/?branch_id={branch.id}')
+        response = authenticated_admin_client.get(f'/api/v1/stock/alerts/active/?branch_id={branch.id}')
 
         assert response.status_code == status.HTTP_200_OK
         for alert in response.data:

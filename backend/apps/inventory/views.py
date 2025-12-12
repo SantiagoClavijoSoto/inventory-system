@@ -6,6 +6,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Sum, Q
 
 from apps.users.permissions import HasPermission, CanAccessBranch
+from core.mixins import TenantQuerySetMixin
 from .models import Category, Product, BranchStock, StockMovement, StockAlert
 from .serializers import (
     CategorySerializer,
@@ -24,10 +25,11 @@ from .services import StockService
 from .filters import ProductFilter, StockMovementFilter
 
 
-class CategoryViewSet(viewsets.ModelViewSet):
+class CategoryViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
     """
     ViewSet for product categories.
     Supports hierarchical category management.
+    Auto-filtered by company via TenantQuerySetMixin.
     """
     queryset = Category.active.all()
     serializer_class = CategorySerializer
@@ -67,9 +69,10 @@ class CategoryViewSet(viewsets.ModelViewSet):
         instance.save()
 
 
-class ProductViewSet(viewsets.ModelViewSet):
+class ProductViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
     """
     ViewSet for products with barcode search and stock management.
+    Auto-filtered by company via TenantQuerySetMixin.
     """
     queryset = Product.active.select_related(
         'category', 'supplier'

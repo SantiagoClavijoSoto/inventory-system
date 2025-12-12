@@ -39,8 +39,8 @@ class DashboardService:
             total_transactions=Count('id'),
             total_items=Sum('items__quantity'),
             total_profit=Sum(
-                F('items__unit_price') - F('items__cost_price')
-            ) * F('items__quantity'),
+                (F('items__unit_price') - F('items__cost_price')) * F('items__quantity')
+            ),
             avg_ticket=Avg('total')
         )
 

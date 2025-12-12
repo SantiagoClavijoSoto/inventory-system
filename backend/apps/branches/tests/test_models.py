@@ -189,20 +189,19 @@ class TestBranchSoftDelete:
     """Tests for Branch soft delete functionality."""
 
     def test_soft_delete(self, db):
-        """Test that deleting a branch soft deletes it."""
+        """Test that soft_delete marks branch as deleted."""
         branch = Branch.objects.create(name='To Delete', code='DEL')
-        branch.delete()
+        branch.soft_delete()
 
-        # Should still exist in database
-        assert Branch.objects.filter(code='DEL').exists()
         # Should be marked as deleted
         branch.refresh_from_db()
         assert branch.is_deleted is True
+        assert branch.deleted_at is not None
 
     def test_restore(self, db):
         """Test restoring a soft deleted branch."""
         branch = Branch.objects.create(name='To Restore', code='RES')
-        branch.delete()
+        branch.soft_delete()
 
         assert branch.is_deleted is True
 

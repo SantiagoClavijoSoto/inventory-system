@@ -162,31 +162,45 @@ class TestSaleService:
 
     def test_get_daily_summary(self, branch, cashier_user, product, branch_stock):
         """Test daily summary generation."""
+        from apps.sales.models import Sale
+        from django.utils.timezone import localtime
+
         # Create some sales
         items = [{
             'product_id': product.id,
             'quantity': 1,
         }]
 
-        SaleService.create_sale(
+        sale1 = SaleService.create_sale(
             branch=branch,
             cashier=cashier_user,
             items=items,
             payment_method='cash',
             amount_tendered=Decimal('200.00'),
         )
+        assert sale1.status == 'completed'
 
-        SaleService.create_sale(
+        sale2 = SaleService.create_sale(
             branch=branch,
             cashier=cashier_user,
             items=items,
             payment_method='card',
         )
+        assert sale2.status == 'completed'
 
-        summary = SaleService.get_daily_summary(branch)
+        # Verify sales exist in database (without date filter)
+        all_sales = Sale.objects.filter(branch=branch, status='completed')
+        assert all_sales.count() >= 2
 
-        assert summary['total_sales'] >= 2
-        assert summary['total_revenue'] > 0
+        # Use localtime to get the date in the project's timezone
+        # This matches how get_daily_summary calculates the date
+        date_to_use = localtime(sale1.created_at).date()
+
+        summary = SaleService.get_daily_summary(branch, date=date_to_use)
+
+        # sale_count is the number of sales, total_sales is the revenue sum
+        assert summary['sale_count'] >= 2
+        assert summary['total_sales'] > 0
 
     def test_multiple_items_sale(
         self, branch, cashier_user, product, second_product,

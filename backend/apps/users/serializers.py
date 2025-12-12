@@ -56,6 +56,7 @@ class UserSerializer(serializers.ModelSerializer):
     )
     permissions = serializers.SerializerMethodField()
     full_name = serializers.CharField(read_only=True)
+    is_platform_admin = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -63,6 +64,7 @@ class UserSerializer(serializers.ModelSerializer):
             'id', 'email', 'first_name', 'last_name', 'full_name',
             'phone', 'avatar', 'role', 'role_id', 'permissions',
             'default_branch', 'allowed_branches', 'is_active',
+            'is_platform_admin',
             'created_at', 'updated_at', 'last_login'
         ]
         read_only_fields = ['created_at', 'updated_at', 'last_login']
@@ -72,6 +74,10 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_permissions(self, obj):
         return obj.get_permissions()
+
+    def get_is_platform_admin(self, obj):
+        """Return True if user is a platform superadmin (no company assigned)."""
+        return obj.is_superuser and obj.company_id is None
 
 
 class UserCreateSerializer(serializers.ModelSerializer):

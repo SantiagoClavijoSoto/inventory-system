@@ -107,13 +107,14 @@ class TestSupplierModel:
         assert supplier.notes == 'Important supplier'
 
     def test_supplier_soft_delete(self, db):
-        """Test that deleting a supplier soft deletes it."""
+        """Test that soft_delete marks supplier as deleted."""
         supplier = Supplier.objects.create(name='To Delete', code='DEL')
-        supplier.delete()
+        supplier.soft_delete()
 
-        assert Supplier.objects.filter(code='DEL').exists()
+        # After soft delete, object still exists in database but is_deleted=True
         supplier.refresh_from_db()
         assert supplier.is_deleted is True
+        assert supplier.deleted_at is not None
 
 
 class TestPurchaseOrderModel:

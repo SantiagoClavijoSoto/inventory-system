@@ -10,6 +10,7 @@ from django.http import HttpResponse
 from django.utils import timezone
 
 from apps.users.permissions import HasPermission
+from core.mixins import TenantQuerySetMixin
 from .pdf_service import ReceiptPDFService
 from apps.branches.models import Branch
 from .models import Sale, DailyCashRegister
@@ -27,11 +28,12 @@ from .serializers import (
 from .services import SaleService, CashRegisterService
 
 
-class SaleViewSet(viewsets.ModelViewSet):
+class SaleViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
     """
     ViewSet for managing sales.
+    Auto-filtered by company via TenantQuerySetMixin (through branch).
 
-    list: Get all sales (filtered by branch)
+    list: Get all sales (filtered by company/branch)
     retrieve: Get sale details
     create: Create a new sale
     void: Void an existing sale
@@ -46,6 +48,7 @@ class SaleViewSet(viewsets.ModelViewSet):
     ).prefetch_related('items')
     serializer_class = SaleSerializer
     permission_classes = [IsAuthenticated]
+    tenant_field = 'branch__company'  # Filter through branch's company
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -53,8 +56,8 @@ class SaleViewSet(viewsets.ModelViewSet):
 
         # Filter by branch if not admin
         if user.role and user.role.role_type != 'admin':
-            if user.allowed_branches:
-                queryset = queryset.filter(branch_id__in=user.allowed_branches)
+            if user.allowed_branches.exists():
+                queryset = queryset.filter(branch_id__in=user.allowed_branches.all())
             elif user.default_branch:
                 queryset = queryset.filter(branch_id=user.default_branch)
 
@@ -289,11 +292,12 @@ class SaleViewSet(viewsets.ModelViewSet):
         return response
 
 
-class CashRegisterViewSet(viewsets.ModelViewSet):
+class CashRegisterViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
     """
     ViewSet for managing daily cash registers.
+    Auto-filtered by company via TenantQuerySetMixin (through branch).
 
-    list: Get all registers (filtered by branch)
+    list: Get all registers (filtered by company/branch)
     retrieve: Get register details
     open: Open a new register
     close: Close an open register
@@ -306,6 +310,7 @@ class CashRegisterViewSet(viewsets.ModelViewSet):
     )
     serializer_class = DailyCashRegisterSerializer
     permission_classes = [IsAuthenticated, HasPermission('sales:register')]
+    tenant_field = 'branch__company'  # Filter through branch's company
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -313,8 +318,8 @@ class CashRegisterViewSet(viewsets.ModelViewSet):
 
         # Filter by branch
         if user.role and user.role.role_type != 'admin':
-            if user.allowed_branches:
-                queryset = queryset.filter(branch_id__in=user.allowed_branches)
+            if user.allowed_branches.exists():
+                queryset = queryset.filter(branch_id__in=user.allowed_branches.all())
             elif user.default_branch:
                 queryset = queryset.filter(branch_id=user.default_branch)
 

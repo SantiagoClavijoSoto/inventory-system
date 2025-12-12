@@ -291,6 +291,25 @@ class UserAlertPreferenceViewSet(viewsets.ViewSet):
         request=UserAlertPreferenceSerializer,
         responses={200: UserAlertPreferenceSerializer}
     )
+    @action(detail=False, methods=['put', 'patch'], url_path='me')
+    def me(self, request):
+        """Update current user's alert preferences."""
+        serializer = UserAlertPreferenceSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+
+        prefs = AlertConfigurationService.update_user_preferences(
+            request.user,
+            **serializer.validated_data
+        )
+        output_serializer = UserAlertPreferenceSerializer(prefs)
+        return Response(output_serializer.data)
+
+    @extend_schema(
+        summary="Update my preferences",
+        description="Update current user's alert preferences.",
+        request=UserAlertPreferenceSerializer,
+        responses={200: UserAlertPreferenceSerializer}
+    )
     def update(self, request, pk=None):
         """Update user's alert preferences."""
         serializer = UserAlertPreferenceSerializer(data=request.data, partial=True)

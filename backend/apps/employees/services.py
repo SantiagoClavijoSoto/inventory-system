@@ -149,7 +149,7 @@ class EmployeeService:
             Dictionary with employee statistics
         """
         if not date_to:
-            date_to = date.today()
+            date_to = timezone.localdate()
         if not date_from:
             date_from = date_to - timedelta(days=30)
 
@@ -305,7 +305,7 @@ class ShiftService:
             Dictionary with shift summary
         """
         if not target_date:
-            target_date = date.today()
+            target_date = timezone.localdate()
 
         shifts = Shift.objects.filter(
             branch=branch,

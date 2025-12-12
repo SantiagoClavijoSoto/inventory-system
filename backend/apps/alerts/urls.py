@@ -13,8 +13,21 @@ from .views import (
 router = DefaultRouter()
 router.register(r'', AlertViewSet, basename='alert')
 router.register(r'configurations', AlertConfigurationViewSet, basename='alert-configuration')
-router.register(r'preferences', UserAlertPreferenceViewSet, basename='alert-preference')
+
+# Create preference viewset instance for manual URL registration
+preference_viewset = UserAlertPreferenceViewSet.as_view({
+    'get': 'list',
+})
+preference_me_viewset = UserAlertPreferenceViewSet.as_view({
+    'get': 'list',
+    'put': 'me',
+    'patch': 'me',
+})
 
 urlpatterns = [
+    # User alert preferences (manual registration for ViewSet)
+    path('preferences/', preference_viewset, name='alert-preference-list'),
+    path('preferences/me/', preference_me_viewset, name='alert-preference-me'),
+    # Router URLs
     path('', include(router.urls)),
 ]
