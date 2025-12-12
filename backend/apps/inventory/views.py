@@ -203,7 +203,10 @@ class ProductViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
         """
         Search products for POS with stock info.
         Returns products with branch-specific stock levels.
+        Only returns products belonging to the same company as the branch.
         """
+        from apps.branches.models import Branch
+
         branch_id = request.query_params.get('branch')
         search = request.query_params.get('search', '').strip()
 
@@ -216,14 +219,29 @@ class ProductViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
         if not search:
             return Response([])
 
-        # Search by name, SKU, or barcode
+        # Get the branch to filter products by its company
+        try:
+            branch = Branch.objects.get(id=branch_id, is_active=True)
+        except Branch.DoesNotExist:
+            return Response(
+                {'error': 'Sucursal no encontrada'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Search by name, SKU, or barcode - filtered by branch's company
         products = self.get_queryset().filter(
             is_active=True
         ).filter(
             Q(name__icontains=search) |
             Q(sku__icontains=search) |
             Q(barcode__icontains=search)
-        )[:20]
+        )
+
+        # Filter by branch's company if the branch has one
+        if branch.company_id:
+            products = products.filter(company_id=branch.company_id)
+
+        products = products[:20]
 
         # Build response with stock info for each product
         result = []
