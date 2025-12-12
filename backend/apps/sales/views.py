@@ -309,8 +309,20 @@ class CashRegisterViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
         'closed_by'
     )
     serializer_class = DailyCashRegisterSerializer
-    permission_classes = [IsAuthenticated, HasPermission('sales:register')]
+    permission_classes = [IsAuthenticated]
     tenant_field = 'branch__company'  # Filter through branch's company
+
+    def get_permissions(self):
+        """Set permissions based on action."""
+        if self.action in ['open', 'close', 'current']:
+            # Users who can create sales can open/close registers
+            self.permission_classes = [IsAuthenticated, HasPermission('sales:create')]
+        elif self.action in ['list', 'retrieve']:
+            self.permission_classes = [IsAuthenticated, HasPermission('sales:view')]
+        else:
+            # For other actions (update, delete), require register permission
+            self.permission_classes = [IsAuthenticated, HasPermission('sales:register')]
+        return super().get_permissions()
 
     def get_queryset(self):
         queryset = super().get_queryset()
