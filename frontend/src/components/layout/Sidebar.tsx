@@ -1,6 +1,7 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { cn } from '@/utils/cn'
-import { useAuthStore, useModulePermission } from '@/store/authStore'
+import { useAuthStore, useModulePermission, useIsPlatformAdmin } from '@/store/authStore'
+import { useThemeStore } from '@/store/themeStore'
 import {
   LayoutDashboard,
   Package,
@@ -10,6 +11,7 @@ import {
   FileText,
   Settings,
   Building2,
+  Building,
   Bell,
   LogOut,
 } from 'lucide-react'
@@ -21,7 +23,8 @@ interface NavItem {
   module: string
 }
 
-const navigation: NavItem[] = [
+// Navigation for regular company users (admins, employees)
+const regularNavigation: NavItem[] = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard, module: 'dashboard' },
   { name: 'Punto de Venta', href: '/pos', icon: ShoppingCart, module: 'sales' },
   { name: 'Inventario', href: '/inventory', icon: Package, module: 'inventory' },
@@ -33,23 +36,53 @@ const navigation: NavItem[] = [
   { name: 'Configuración', href: '/settings', icon: Settings, module: 'settings' },
 ]
 
+// Navigation for platform superadmin (SaaS owner)
+const superadminNavigation: NavItem[] = [
+  { name: 'Dashboard', href: '/', icon: LayoutDashboard, module: 'dashboard' },
+  { name: 'Clientes', href: '/clients', icon: Building, module: 'companies' },
+  { name: 'Inventario', href: '/inventory', icon: Package, module: 'inventory' },
+  { name: 'Alertas', href: '/alerts', icon: Bell, module: 'alerts' },
+  { name: 'Configuración', href: '/settings', icon: Settings, module: 'settings' },
+]
+
 export function Sidebar() {
   const location = useLocation()
   const { user, logout } = useAuthStore()
+  const { branding } = useThemeStore()
+  const isPlatformAdmin = useIsPlatformAdmin()
+
+  // Select navigation based on user role
+  const navigation = isPlatformAdmin ? superadminNavigation : regularNavigation
 
   const handleLogout = async () => {
     await logout()
   }
+
+  // Get store name from branding or fallback
+  const storeName = isPlatformAdmin
+    ? 'Panel Administrador'
+    : branding?.display_name || 'Sistema de Inventario'
+  const logoUrl = isPlatformAdmin ? null : branding?.logo_url
 
   return (
     <aside className="fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-secondary-200 flex flex-col">
       {/* Logo */}
       <div className="h-16 flex items-center px-6 border-b border-secondary-200">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
-            <Package className="w-5 h-5 text-white" />
-          </div>
-          <span className="text-lg font-semibold text-secondary-900">Inventario</span>
+          {logoUrl ? (
+            <img
+              src={logoUrl}
+              alt={storeName}
+              className="w-8 h-8 rounded-lg object-contain"
+            />
+          ) : (
+            <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
+              <Package className="w-5 h-5 text-white" />
+            </div>
+          )}
+          <span className="text-lg font-semibold text-secondary-900 truncate max-w-[160px]">
+            {storeName}
+          </span>
         </div>
       </div>
 
@@ -57,8 +90,10 @@ export function Sidebar() {
       <nav className="flex-1 overflow-y-auto py-4 px-3">
         <ul className="space-y-1">
           {navigation.map((item) => {
+            // Platform admins have access to all their navigation items
+            // Regular users need module permission check
             const hasAccess = useModulePermission(item.module)
-            if (!hasAccess && user?.role?.role_type !== 'admin') return null
+            if (!isPlatformAdmin && !hasAccess && user?.role?.role_type !== 'admin') return null
 
             const isActive =
               item.href === '/'

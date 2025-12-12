@@ -11,6 +11,7 @@ interface ModalProps {
   children: ReactNode
   size?: 'sm' | 'md' | 'lg' | 'xl' | 'full'
   showCloseButton?: boolean
+  zIndex?: 'z-50' | 'z-[60]' | 'z-[100]'
 }
 
 const sizeClasses = {
@@ -29,10 +30,11 @@ export function Modal({
   children,
   size = 'md',
   showCloseButton = true,
+  zIndex = 'z-50',
 }: ModalProps) {
   return (
     <Transition appear show={isOpen} as={Fragment}>
-      <Dialog as="div" className="relative z-50" onClose={onClose}>
+      <Dialog as="div" className={cn('relative', zIndex)} onClose={onClose}>
         <Transition.Child
           as={Fragment}
           enter="ease-out duration-300"

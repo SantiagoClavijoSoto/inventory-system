@@ -1,6 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useAuthStore } from '@/store/authStore'
 import { productApi, categoryApi } from '@/api/inventory'
 import {
   Card,
@@ -24,7 +23,6 @@ import {
 import {
   Plus,
   Search,
-  Filter,
   Edit2,
   Trash2,
   Package,
@@ -32,11 +30,10 @@ import {
   RefreshCw,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import type { Product, Category } from '@/types'
+import type { Product, Category, ProductUnit } from '@/types'
 
 export function Products() {
   const queryClient = useQueryClient()
-  const { currentBranch } = useAuthStore()
 
   // State
   const [search, setSearch] = useState('')
@@ -380,6 +377,9 @@ function ProductFormModal({ isOpen, onClose, product, categories }: ProductFormM
   const queryClient = useQueryClient()
   const isEditing = !!product
 
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false)
+  const [newCategoryName, setNewCategoryName] = useState('')
+
   const [formData, setFormData] = useState({
     name: '',
     sku: '',
@@ -396,39 +396,41 @@ function ProductFormModal({ isOpen, onClose, product, categories }: ProductFormM
   })
 
   // Reset form when modal opens/closes or product changes
-  useState(() => {
-    if (product) {
-      setFormData({
-        name: product.name,
-        sku: product.sku,
-        barcode: product.barcode || '',
-        description: product.description || '',
-        category: String(product.category),
-        cost_price: String(product.cost_price),
-        sale_price: String(product.sale_price),
-        unit: product.unit,
-        min_stock: String(product.min_stock),
-        max_stock: String(product.max_stock),
-        is_active: product.is_active,
-        is_sellable: product.is_sellable,
-      })
-    } else {
-      setFormData({
-        name: '',
-        sku: '',
-        barcode: '',
-        description: '',
-        category: '',
-        cost_price: '',
-        sale_price: '',
-        unit: 'unit',
-        min_stock: '10',
-        max_stock: '100',
-        is_active: true,
-        is_sellable: true,
-      })
+  useEffect(() => {
+    if (isOpen) {
+      if (product) {
+        setFormData({
+          name: product.name,
+          sku: product.sku,
+          barcode: product.barcode || '',
+          description: product.description || '',
+          category: String(product.category),
+          cost_price: String(product.cost_price),
+          sale_price: String(product.sale_price),
+          unit: product.unit,
+          min_stock: String(product.min_stock),
+          max_stock: String(product.max_stock),
+          is_active: product.is_active,
+          is_sellable: product.is_sellable,
+        })
+      } else {
+        setFormData({
+          name: '',
+          sku: '',
+          barcode: '',
+          description: '',
+          category: '',
+          cost_price: '',
+          sale_price: '',
+          unit: 'unit',
+          min_stock: '10',
+          max_stock: '100',
+          is_active: true,
+          is_sellable: true,
+        })
+      }
     }
-  })
+  }, [isOpen, product])
 
   const createMutation = useMutation({
     mutationFn: productApi.create,
@@ -457,17 +459,38 @@ function ProductFormModal({ isOpen, onClose, product, categories }: ProductFormM
     },
   })
 
+  const createCategoryMutation = useMutation({
+    mutationFn: (name: string) => categoryApi.create({ name, is_active: true }),
+    onSuccess: (newCategory) => {
+      queryClient.invalidateQueries({ queryKey: ['categories'] })
+      toast.success('Categoría creada correctamente')
+      setFormData({ ...formData, category: String(newCategory.id) })
+      setIsCategoryModalOpen(false)
+      setNewCategoryName('')
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.detail || 'Error al crear la categoría'
+      toast.error(message)
+    },
+  })
+
+  const handleCreateCategory = () => {
+    if (newCategoryName.trim()) {
+      createCategoryMutation.mutate(newCategoryName.trim())
+    }
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    const data = {
+    const data: Partial<Product> = {
       name: formData.name,
       sku: formData.sku,
-      barcode: formData.barcode || null,
+      ...(formData.barcode && { barcode: formData.barcode }),
       description: formData.description,
       category: Number(formData.category),
       cost_price: Number(formData.cost_price),
       sale_price: Number(formData.sale_price),
-      unit: formData.unit,
+      unit: formData.unit as ProductUnit,
       min_stock: Number(formData.min_stock),
       max_stock: Number(formData.max_stock),
       is_active: formData.is_active,
@@ -484,6 +507,7 @@ function ProductFormModal({ isOpen, onClose, product, categories }: ProductFormM
   const isLoading = createMutation.isPending || updateMutation.isPending
 
   return (
+    <>
     <Modal
       isOpen={isOpen}
       onClose={onClose}
@@ -512,13 +536,28 @@ function ProductFormModal({ isOpen, onClose, product, categories }: ProductFormM
             value={formData.barcode}
             onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
           />
-          <Select
-            label="Categoría"
-            options={categories.map((c) => ({ value: String(c.id), label: c.name }))}
-            value={formData.category}
-            onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-            placeholder="Seleccionar categoría"
-          />
+          <div>
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <Select
+                  label="Categoría"
+                  options={categories.map((c) => ({ value: String(c.id), label: c.name }))}
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  placeholder="Seleccionar categoría"
+                />
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="mb-0"
+                onClick={() => setIsCategoryModalOpen(true)}
+                title="Crear nueva categoría"
+              >
+                <Plus className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-3 gap-4">
@@ -603,5 +642,48 @@ function ProductFormModal({ isOpen, onClose, product, categories }: ProductFormM
         </ModalFooter>
       </form>
     </Modal>
+
+    {/* Category Creation Modal */}
+    <Modal
+      isOpen={isCategoryModalOpen}
+      onClose={() => {
+        setIsCategoryModalOpen(false)
+        setNewCategoryName('')
+      }}
+      title="Nueva Categoría"
+      size="sm"
+      zIndex="z-[60]"
+    >
+      <div className="space-y-4" onClick={(e) => e.stopPropagation()}>
+        <Input
+          label="Nombre de la categoría"
+          value={newCategoryName}
+          onChange={(e) => setNewCategoryName(e.target.value)}
+          onMouseDown={(e) => e.stopPropagation()}
+          placeholder="Ej: Herramientas, Electrónica..."
+          autoFocus
+        />
+      </div>
+      <ModalFooter>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => {
+            setIsCategoryModalOpen(false)
+            setNewCategoryName('')
+          }}
+        >
+          Cancelar
+        </Button>
+        <Button
+          onClick={handleCreateCategory}
+          isLoading={createCategoryMutation.isPending}
+          disabled={!newCategoryName.trim()}
+        >
+          Crear categoría
+        </Button>
+      </ModalFooter>
+    </Modal>
+    </>
   )
 }

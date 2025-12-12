@@ -1,17 +1,60 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuthStore } from '@/store/authStore'
-import { Bell, ChevronDown, Building2 } from 'lucide-react'
+import { useThemeStore } from '@/store/themeStore'
+import { branchesApi } from '@/api/branches'
+import { Bell, ChevronDown, Building2, Check, Loader2 } from 'lucide-react'
+import type { Branch } from '@/types'
 
 export function Header() {
   const { user, currentBranch, setCurrentBranch } = useAuthStore()
+  const { loadBranding, branding } = useThemeStore()
   const [showBranchSelector, setShowBranchSelector] = useState(false)
+  const [branches, setBranches] = useState<Branch[]>([])
+  const [isLoadingBranches, setIsLoadingBranches] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
 
-  // Mock branches for now - will be fetched from API later
-  const branches = [
-    { id: 1, name: 'Sucursal Principal', code: 'SUC001' },
-    { id: 2, name: 'Sucursal Norte', code: 'SUC002' },
-    { id: 3, name: 'Sucursal Sur', code: 'SUC003' },
-  ]
+  // Fetch branches on mount
+  useEffect(() => {
+    const fetchBranches = async () => {
+      setIsLoadingBranches(true)
+      try {
+        const response = await branchesApi.getAll({ is_active: true })
+        setBranches(response.results)
+
+        // Auto-select first branch if none selected
+        if (!currentBranch && response.results.length > 0) {
+          const defaultBranch = response.results.find(b => b.is_main) || response.results[0]
+          handleBranchSelect(defaultBranch)
+        }
+      } catch (error) {
+        console.error('Error fetching branches:', error)
+      } finally {
+        setIsLoadingBranches(false)
+      }
+    }
+    fetchBranches()
+  }, [])
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowBranchSelector(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const handleBranchSelect = async (branch: Branch) => {
+    setCurrentBranch(branch)
+    setShowBranchSelector(false)
+    // Load the theme for the selected branch
+    await loadBranding(branch.id)
+  }
+
+  // Get display name from branding or branch
+  const displayBranchName = branding?.display_name || currentBranch?.name || 'Seleccionar sucursal'
 
   return (
     <header className="h-16 bg-white border-b border-secondary-200 flex items-center justify-between px-6">
@@ -24,31 +67,56 @@ export function Header() {
 
       <div className="flex items-center gap-4">
         {/* Branch Selector */}
-        <div className="relative">
+        <div className="relative" ref={dropdownRef}>
           <button
             onClick={() => setShowBranchSelector(!showBranchSelector)}
             className="flex items-center gap-2 px-3 py-2 text-sm text-secondary-700 hover:bg-secondary-100 rounded-lg transition-colors"
           >
-            <Building2 className="w-4 h-4" />
-            <span>{currentBranch?.name || 'Seleccionar sucursal'}</span>
-            <ChevronDown className="w-4 h-4" />
+            <Building2 className="w-4 h-4 text-primary-600" />
+            <span className="max-w-[200px] truncate">{displayBranchName}</span>
+            <ChevronDown className={`w-4 h-4 transition-transform ${showBranchSelector ? 'rotate-180' : ''}`} />
           </button>
 
           {showBranchSelector && (
-            <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-secondary-200 py-1 z-50">
-              {branches.map((branch) => (
-                <button
-                  key={branch.id}
-                  onClick={() => {
-                    setCurrentBranch(branch as any)
-                    setShowBranchSelector(false)
-                  }}
-                  className="w-full px-4 py-2 text-left text-sm text-secondary-700 hover:bg-secondary-50"
-                >
-                  <span className="font-medium">{branch.name}</span>
-                  <span className="text-secondary-400 ml-2">({branch.code})</span>
-                </button>
-              ))}
+            <div className="absolute right-0 mt-2 w-72 bg-white rounded-lg shadow-lg border border-secondary-200 py-1 z-50 max-h-80 overflow-y-auto">
+              {isLoadingBranches ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="w-5 h-5 animate-spin text-primary-600" />
+                </div>
+              ) : branches.length === 0 ? (
+                <div className="px-4 py-3 text-sm text-secondary-500 text-center">
+                  No hay sucursales disponibles
+                </div>
+              ) : (
+                branches.map((branch) => (
+                  <button
+                    key={branch.id}
+                    onClick={() => handleBranchSelect(branch)}
+                    className={`w-full px-4 py-2 text-left text-sm flex items-center justify-between gap-2 transition-colors ${
+                      currentBranch?.id === branch.id
+                        ? 'bg-primary-50 text-primary-700'
+                        : 'text-secondary-700 hover:bg-secondary-50'
+                    }`}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate">
+                        {branch.display_name || branch.name}
+                      </div>
+                      <div className="text-xs text-secondary-400 flex items-center gap-2">
+                        <span>{branch.code}</span>
+                        {branch.is_main && (
+                          <span className="px-1.5 py-0.5 bg-primary-100 text-primary-600 rounded text-[10px] font-medium">
+                            Principal
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {currentBranch?.id === branch.id && (
+                      <Check className="w-4 h-4 text-primary-600 flex-shrink-0" />
+                    )}
+                  </button>
+                ))
+              )}
             </div>
           )}
         </div>

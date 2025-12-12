@@ -1,5 +1,5 @@
 import { Navigate, useLocation } from 'react-router-dom'
-import { useAuthStore } from '@/store/authStore'
+import { useAuthStore, useIsPlatformAdmin } from '@/store/authStore'
 import { Loader2 } from 'lucide-react'
 
 interface ProtectedRouteProps {
@@ -16,6 +16,7 @@ export function ProtectedRoute({
   const location = useLocation()
   const { isAuthenticated, isLoading, hasPermission, hasModulePermission, user } =
     useAuthStore()
+  const isPlatformAdmin = useIsPlatformAdmin()
 
   // Show loading spinner while checking auth
   if (isLoading) {
@@ -32,6 +33,11 @@ export function ProtectedRoute({
   // Redirect to login if not authenticated
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />
+  }
+
+  // Platform admins bypass all permission checks
+  if (isPlatformAdmin) {
+    return <>{children}</>
   }
 
   // Check specific permission if required
