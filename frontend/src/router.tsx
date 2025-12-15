@@ -8,7 +8,6 @@ import { Login } from '@/pages/auth/Login'
 // Main Pages
 import { Dashboard } from '@/pages/dashboard/Dashboard'
 import { Products } from '@/pages/inventory/Products'
-import { POS } from '@/pages/pos/POS'
 import { Employees } from '@/pages/employees/Employees'
 import { Suppliers } from '@/pages/suppliers/Suppliers'
 import { Reports } from '@/pages/reports/Reports'
@@ -16,6 +15,7 @@ import { Alerts } from '@/pages/alerts/Alerts'
 import { Branches } from '@/pages/branches/Branches'
 import { Settings } from '@/pages/settings/Settings'
 import { Clients } from '@/pages/clients/Clients'
+import { Subscriptions } from '@/pages/subscriptions/Subscriptions'
 
 // Error Pages
 import { NotFound } from '@/pages/errors/NotFound'
@@ -52,14 +52,6 @@ export const router = createBrowserRouter([
       {
         index: true,
         element: <Dashboard />,
-      },
-      {
-        path: 'pos',
-        element: (
-          <ProtectedRoute requiredModule="sales">
-            <POS />
-          </ProtectedRoute>
-        ),
       },
       {
         path: 'inventory',
@@ -146,6 +138,14 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute requiredModule="companies">
             <Clients />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'subscriptions',
+        element: (
+          <ProtectedRoute requiredModule="subscriptions">
+            <Subscriptions />
           </ProtectedRoute>
         ),
       },

@@ -21,24 +21,24 @@ export const saleApi = {
     page_size?: number
   }) => {
     const response = await apiClient.get<PaginatedResponse<Sale>>(
-      '/sales/sales/',
+      '/sales/',
       { params: filters }
     )
     return response.data
   },
 
   getById: async (id: number) => {
-    const response = await apiClient.get<Sale>(`/sales/sales/${id}/`)
+    const response = await apiClient.get<Sale>(`/sales/${id}/`)
     return response.data
   },
 
   create: async (data: CreateSaleRequest) => {
-    const response = await apiClient.post<Sale>('/sales/sales/', data)
+    const response = await apiClient.post<Sale>('/sales/', data)
     return response.data
   },
 
   void: async (id: number, reason: string) => {
-    const response = await apiClient.post<Sale>(`/sales/sales/${id}/void/`, {
+    const response = await apiClient.post<Sale>(`/sales/${id}/void/`, {
       reason,
     })
     return response.data
@@ -49,7 +49,7 @@ export const saleApi = {
     items: { sale_item_id: number; quantity: number }[],
     reason: string
   ) => {
-    const response = await apiClient.post<Sale>(`/sales/sales/${id}/refund/`, {
+    const response = await apiClient.post<Sale>(`/sales/${id}/refund/`, {
       items,
       reason,
     })
@@ -58,7 +58,7 @@ export const saleApi = {
 
   getDailySummary: async (branchId?: number, date?: string) => {
     const response = await apiClient.get<DailySummary>(
-      '/sales/sales/daily_summary/',
+      '/sales/daily_summary/',
       {
         params: {
           branch: branchId,
@@ -76,7 +76,7 @@ export const saleApi = {
     limit?: number
   ) => {
     const response = await apiClient.get<TopProduct[]>(
-      '/sales/sales/top_products/',
+      '/sales/top_products/',
       {
         params: {
           branch: branchId,
@@ -115,8 +115,25 @@ export const saleApi = {
       amount_tendered: string
       change: string
       customer_name: string
-    }>(`/sales/sales/${id}/receipt/`)
+    }>(`/sales/${id}/receipt/`)
     return response.data
+  },
+
+  downloadReceiptPdf: async (id: number, saleNumber: string) => {
+    const response = await apiClient.get(`/sales/${id}/receipt_pdf/`, {
+      responseType: 'blob',
+    })
+
+    // Create a blob URL and trigger download
+    const blob = new Blob([response.data], { type: 'application/pdf' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `recibo_${saleNumber}.pdf`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
   },
 }
 

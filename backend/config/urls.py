@@ -14,6 +14,7 @@ from drf_spectacular.views import (
 # Import shifts patterns
 from apps.employees.urls import shifts_urlpatterns
 from apps.suppliers.urls import orders_urlpatterns
+from apps.companies.urls import subscriptions_urlpatterns
 
 # API v1 URL patterns
 api_v1_patterns = [
@@ -21,6 +22,7 @@ api_v1_patterns = [
     path('auth/', include('apps.users.urls')),
     # Platform Management (SuperAdmin only)
     path('companies/', include('apps.companies.urls')),
+    path('subscriptions/', include(subscriptions_urlpatterns)),
     # Core modules
     path('branches/', include('apps.branches.urls')),
     path('employees/', include('apps.employees.urls')),

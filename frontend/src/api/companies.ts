@@ -89,6 +89,30 @@ export interface CompanyStats {
   }
 }
 
+// Company Administrator type (for SuperAdmin view)
+export interface CompanyAdmin {
+  id: number
+  email: string
+  first_name: string
+  last_name: string
+  full_name: string
+  is_company_admin: boolean
+  is_active: boolean
+  created_at: string
+  // Company info
+  company_id: number
+  company_name: string
+  company_slug: string
+  company_plan: CompanyPlan
+  company_is_active: boolean
+  // Role info
+  role_id: number | null
+  role_name: string | null
+  role_type: string | null
+  // Permissions
+  can_manage_roles: boolean
+}
+
 // Companies API (SuperAdmin only)
 export const companiesApi = {
   // Get all companies (paginated)
@@ -175,6 +199,18 @@ export const companiesApi = {
   // Deactivate company
   deactivate: async (id: number): Promise<Company> => {
     const response = await apiClient.post(`/companies/${id}/deactivate/`)
+    return response.data
+  },
+
+  // Get all company administrators (SuperAdmin only)
+  getAdmins: async (): Promise<CompanyAdmin[]> => {
+    const response = await apiClient.get('/companies/admins/')
+    return response.data
+  },
+
+  // Get administrators for a specific company (SuperAdmin only)
+  getCompanyAdmins: async (companyId: number): Promise<CompanyAdmin[]> => {
+    const response = await apiClient.get(`/companies/${companyId}/company_admins/`)
     return response.data
   },
 }

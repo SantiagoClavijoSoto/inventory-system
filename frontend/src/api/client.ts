@@ -98,7 +98,14 @@ apiClient.interceptors.response.use(
     }
 
     // Handle other errors
-    if (error.response?.status === 403) {
+    if (error.response?.status === 400) {
+      // Extract error message from response data
+      const errorData = error.response.data as { error?: string; detail?: string; message?: string }
+      const errorMsg = errorData?.error || errorData?.detail || errorData?.message
+      if (errorMsg) {
+        toast.error(errorMsg)
+      }
+    } else if (error.response?.status === 403) {
       toast.error('No tienes permisos para realizar esta acción')
     } else if (error.response?.status === 404) {
       toast.error('Recurso no encontrado')

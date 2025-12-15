@@ -9,7 +9,7 @@ import type { LoginCredentials, LoginResponse, User } from '@/types'
 export const authApi = {
   login: async (credentials: LoginCredentials): Promise<LoginResponse> => {
     const response = await apiClient.post<LoginResponse>('/auth/login/', credentials)
-    const { access, refresh, user } = response.data
+    const { access, refresh } = response.data
 
     setAccessToken(access)
     setRefreshToken(refresh)

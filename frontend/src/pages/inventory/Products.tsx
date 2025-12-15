@@ -31,6 +31,7 @@ import {
   RefreshCw,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { formatCurrency } from '@/utils/formatters'
 import type { Product, Category, ProductUnit } from '@/types'
 
 export function Products() {
@@ -83,13 +84,6 @@ export function Products() {
     if (selectedProduct) {
       deleteMutation.mutate(selectedProduct.id)
     }
-  }
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency: 'MXN',
-    }).format(value)
   }
 
   const getStockBadge = (product: Product) => {

@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useAuthStore } from '@/store/authStore'
+import { useAuthStore, useIsPlatformAdmin } from '@/store/authStore'
 import {
   authApi,
   usersApi,
@@ -15,6 +15,7 @@ import {
 } from '@/api/users'
 import { alertPreferencesApi, type UserAlertPreference } from '@/api/alerts'
 import { branchesApi, type BranchSimple } from '@/api/branches'
+import { companiesApi, type CompanyAdmin } from '@/api/companies'
 import {
   Card,
   CardContent,
@@ -48,16 +49,20 @@ import {
   UserX,
   Key,
   AlertTriangle,
+  Building,
+  ChevronDown,
+  ChevronRight,
+  Crown,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 type SettingsTab = 'profile' | 'security' | 'preferences' | 'users' | 'roles'
 
 export function Settings() {
-  const { user, setUser } = useAuthStore()
+  const { user } = useAuthStore()
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile')
 
-  const isAdmin = user?.is_superuser || user?.role === 'admin'
+  const isAdmin = user?.is_platform_admin || user?.role?.role_type === 'admin'
 
   const tabs: { id: SettingsTab; label: string; icon: React.ReactNode; adminOnly?: boolean }[] = [
     { id: 'profile', label: 'Perfil', icon: <UserIcon className="h-4 w-4" /> },
@@ -112,7 +117,7 @@ export function Settings() {
 // Profile Settings Component
 function ProfileSettings() {
   const queryClient = useQueryClient()
-  const { user, setUser } = useAuthStore()
+  const { user } = useAuthStore()
   const [formData, setFormData] = useState({
     first_name: user?.first_name || '',
     last_name: user?.last_name || '',
@@ -121,8 +126,8 @@ function ProfileSettings() {
 
   const updateMutation = useMutation({
     mutationFn: (data: UpdateUserRequest) => authApi.updateMe(data),
-    onSuccess: (updatedUser) => {
-      setUser(updatedUser)
+    onSuccess: () => {
+      // Refetch user data to update the store
       queryClient.invalidateQueries({ queryKey: ['me'] })
       toast.success('Perfil actualizado correctamente')
     },
@@ -161,11 +166,11 @@ function ProfileSettings() {
           />
           <div className="pt-2">
             <p className="text-sm text-secondary-500 mb-4">
-              Rol: <Badge variant="info">{user?.role_name || 'Sin rol'}</Badge>
+              Rol: <Badge variant="primary">{user?.role?.name || 'Sin rol'}</Badge>
             </p>
             <p className="text-sm text-secondary-500">
               Sucursal por defecto:{' '}
-              <span className="font-medium">{user?.default_branch_name || 'No asignada'}</span>
+              <span className="font-medium">{user?.default_branch ? `ID: ${user.default_branch}` : 'No asignada'}</span>
             </p>
           </div>
           <Button type="submit" isLoading={updateMutation.isPending}>
@@ -381,6 +386,12 @@ function PreferencesSettings() {
               Severidad mínima
             </label>
             <Select
+              options={[
+                { value: 'low', label: 'Baja (todas las alertas)' },
+                { value: 'medium', label: 'Media' },
+                { value: 'high', label: 'Alta' },
+                { value: 'critical', label: 'Crítica (solo urgentes)' },
+              ]}
               value={currentPrefs.minimum_severity || 'low'}
               onChange={(e) =>
                 setFormData({
@@ -388,12 +399,7 @@ function PreferencesSettings() {
                   minimum_severity: e.target.value as 'low' | 'medium' | 'high' | 'critical',
                 })
               }
-            >
-              <option value="low">Baja (todas las alertas)</option>
-              <option value="medium">Media</option>
-              <option value="high">Alta</option>
-              <option value="critical">Crítica (solo urgentes)</option>
-            </Select>
+            />
           </div>
 
           <label className="flex items-center gap-3">
@@ -509,7 +515,7 @@ function UsersSettings() {
                     <TableCell className="font-medium">{user.full_name}</TableCell>
                     <TableCell>{user.email}</TableCell>
                     <TableCell>
-                      <Badge variant="info">{user.role_name || 'Sin rol'}</Badge>
+                      <Badge variant="primary">{user.role_name || 'Sin rol'}</Badge>
                     </TableCell>
                     <TableCell>{user.default_branch_name || '-'}</TableCell>
                     <TableCell>
@@ -768,24 +774,25 @@ function UserFormModal({
             <div>
               <label className="block text-sm font-medium text-secondary-700 mb-2">Rol</label>
               <Select
+                options={[
+                  { value: '', label: 'Sin rol' },
+                  ...roles.map((role) => ({ value: role.id, label: role.name })),
+                ]}
                 value={formData.role || ''}
                 onChange={(e) =>
                   setFormData({ ...formData, role: e.target.value ? Number(e.target.value) : undefined })
                 }
-              >
-                <option value="">Sin rol</option>
-                {roles.map((role) => (
-                  <option key={role.id} value={role.id}>
-                    {role.name}
-                  </option>
-                ))}
-              </Select>
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-secondary-700 mb-2">
                 Sucursal por defecto
               </label>
               <Select
+                options={[
+                  { value: '', label: 'Sin sucursal' },
+                  ...branches.map((branch) => ({ value: branch.id, label: branch.name })),
+                ]}
                 value={formData.default_branch || ''}
                 onChange={(e) =>
                   setFormData({
@@ -793,14 +800,7 @@ function UserFormModal({
                     default_branch: e.target.value ? Number(e.target.value) : undefined,
                   })
                 }
-              >
-                <option value="">Sin sucursal</option>
-                {branches.map((branch) => (
-                  <option key={branch.id} value={branch.id}>
-                    {branch.name}
-                  </option>
-                ))}
-              </Select>
+              />
             </div>
           </div>
           <label className="flex items-center gap-3">
@@ -901,6 +901,7 @@ function ResetPasswordModal({
 // Roles Management Component (Admin)
 function RolesSettings() {
   const queryClient = useQueryClient()
+  const isPlatformAdmin = useIsPlatformAdmin()
   const [selectedRole, setSelectedRole] = useState<Role | null>(null)
   const [isFormModalOpen, setIsFormModalOpen] = useState(false)
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
@@ -913,6 +914,13 @@ function RolesSettings() {
   const { data: permissions } = useQuery({
     queryKey: ['permissions'],
     queryFn: permissionsApi.getAll,
+  })
+
+  // Fetch company admins only for platform admins
+  const { data: companyAdmins, isLoading: isLoadingAdmins } = useQuery({
+    queryKey: ['company-admins'],
+    queryFn: companiesApi.getAdmins,
+    enabled: isPlatformAdmin,
   })
 
   const deleteMutation = useMutation({
@@ -928,7 +936,19 @@ function RolesSettings() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-end">
+      {/* Company Administrators Section (SuperAdmin only) */}
+      {isPlatformAdmin && (
+        <CompanyAdminsSection
+          admins={companyAdmins || []}
+          isLoading={isLoadingAdmins}
+        />
+      )}
+
+      {/* Roles Section */}
+      <div className="flex justify-between items-center">
+        <h2 className="text-lg font-semibold text-secondary-900">
+          {isPlatformAdmin ? 'Roles del Sistema' : 'Roles'}
+        </h2>
         <Button
           onClick={() => {
             setSelectedRole(null)
@@ -952,7 +972,7 @@ function RolesSettings() {
                 <div className="flex justify-between items-start">
                   <div>
                     <CardTitle className="text-lg">{role.name}</CardTitle>
-                    <Badge variant={role.role_type === 'system' ? 'secondary' : 'info'}>
+                    <Badge variant={role.role_type === 'system' ? 'secondary' : 'primary'}>
                       {role.role_type === 'system' ? 'Sistema' : 'Personalizado'}
                     </Badge>
                   </div>
@@ -1035,6 +1055,206 @@ function RolesSettings() {
   )
 }
 
+// Company Administrators Section Component (SuperAdmin only)
+function CompanyAdminsSection({
+  admins,
+  isLoading,
+}: {
+  admins: CompanyAdmin[]
+  isLoading: boolean
+}) {
+  const [expandedCompanies, setExpandedCompanies] = useState<Set<number>>(new Set())
+
+  // Group admins by company
+  const adminsByCompany = useMemo(() => {
+    const grouped: Record<number, { company: { id: number; name: string; slug: string; plan: string; is_active: boolean }; admins: CompanyAdmin[] }> = {}
+
+    admins.forEach((admin) => {
+      if (!grouped[admin.company_id]) {
+        grouped[admin.company_id] = {
+          company: {
+            id: admin.company_id,
+            name: admin.company_name,
+            slug: admin.company_slug,
+            plan: admin.company_plan,
+            is_active: admin.company_is_active,
+          },
+          admins: [],
+        }
+      }
+      grouped[admin.company_id].admins.push(admin)
+    })
+
+    return Object.values(grouped).sort((a, b) => a.company.name.localeCompare(b.company.name))
+  }, [admins])
+
+  const toggleCompany = (companyId: number) => {
+    setExpandedCompanies((prev) => {
+      const next = new Set(prev)
+      if (next.has(companyId)) {
+        next.delete(companyId)
+      } else {
+        next.add(companyId)
+      }
+      return next
+    })
+  }
+
+  const planColors: Record<string, string> = {
+    free: 'bg-secondary-100 text-secondary-700',
+    basic: 'bg-blue-100 text-blue-700',
+    professional: 'bg-purple-100 text-purple-700',
+    enterprise: 'bg-amber-100 text-amber-700',
+  }
+
+  const planLabels: Record<string, string> = {
+    free: 'Gratuito',
+    basic: 'Básico',
+    professional: 'Profesional',
+    enterprise: 'Empresarial',
+  }
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Building className="h-5 w-5" />
+            Administradores de Empresas
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex justify-center py-8">
+            <Spinner size="lg" />
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (adminsByCompany.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Building className="h-5 w-5" />
+            Administradores de Empresas
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-secondary-500 text-center py-8">
+            No hay administradores de empresas registrados
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex justify-between items-center">
+          <CardTitle className="flex items-center gap-2">
+            <Building className="h-5 w-5" />
+            Administradores de Empresas
+          </CardTitle>
+          <Badge variant="secondary">{admins.length} administradores</Badge>
+        </div>
+        <p className="text-sm text-secondary-500 mt-1">
+          Los administradores de cada empresa pueden crear roles personalizados para sus usuarios,
+          pero no pueden modificar su propio rol de administrador.
+        </p>
+      </CardHeader>
+      <CardContent className="p-0">
+        <div className="divide-y divide-secondary-200">
+          {adminsByCompany.map(({ company, admins: companyAdmins }) => {
+            const isExpanded = expandedCompanies.has(company.id)
+
+            return (
+              <div key={company.id}>
+                {/* Company Header (Collapsible) */}
+                <button
+                  onClick={() => toggleCompany(company.id)}
+                  className="w-full flex items-center justify-between px-6 py-4 hover:bg-secondary-50 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    {isExpanded ? (
+                      <ChevronDown className="h-4 w-4 text-secondary-400" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4 text-secondary-400" />
+                    )}
+                    <div className="text-left">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-secondary-900">{company.name}</span>
+                        {!company.is_active && (
+                          <Badge variant="danger" className="text-xs">Inactiva</Badge>
+                        )}
+                      </div>
+                      <span className="text-sm text-secondary-500">{company.slug}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className={`px-2 py-1 text-xs font-medium rounded ${planColors[company.plan] || planColors.free}`}>
+                      {planLabels[company.plan] || company.plan}
+                    </span>
+                    <Badge variant="secondary">{companyAdmins.length} admin{companyAdmins.length !== 1 ? 's' : ''}</Badge>
+                  </div>
+                </button>
+
+                {/* Expanded Admin List */}
+                {isExpanded && (
+                  <div className="bg-secondary-50 px-6 py-4">
+                    <div className="space-y-3">
+                      {companyAdmins.map((admin) => (
+                        <div
+                          key={admin.id}
+                          className="flex items-center justify-between bg-white rounded-lg px-4 py-3 shadow-sm"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
+                              {admin.is_company_admin ? (
+                                <Crown className="h-5 w-5 text-amber-500" />
+                              ) : (
+                                <span className="text-primary-700 font-medium">
+                                  {admin.first_name?.[0]}{admin.last_name?.[0]}
+                                </span>
+                              )}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-secondary-900">{admin.full_name}</span>
+                                {admin.is_company_admin && (
+                                  <Badge variant="warning" className="text-xs">Propietario</Badge>
+                                )}
+                              </div>
+                              <span className="text-sm text-secondary-500">{admin.email}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            {admin.role_name && (
+                              <Badge variant="primary">{admin.role_name}</Badge>
+                            )}
+                            {admin.can_manage_roles && (
+                              <span className="text-xs text-success-600 flex items-center gap-1">
+                                <Shield className="h-3 w-3" />
+                                Puede crear roles
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 // Role Form Modal
 function RoleFormModal({
   isOpen,
@@ -1091,10 +1311,12 @@ function RoleFormModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    // The API accepts permission IDs, so we cast to any to bypass the type mismatch
+    const payload = { ...formData, permissions: formData.permissions } as unknown as Partial<Role>
     if (role) {
-      updateMutation.mutate({ id: role.id, data: formData })
+      updateMutation.mutate({ id: role.id, data: payload })
     } else {
-      createMutation.mutate(formData)
+      createMutation.mutate(payload)
     }
   }
 

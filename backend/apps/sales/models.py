@@ -209,9 +209,9 @@ class Sale(TimestampMixin, models.Model):
         if self.discount_percent > 0:
             self.discount_amount = self.subtotal * (self.discount_percent / 100)
 
-        # Calculate tax (16% IVA by default - configurable)
+        # Calculate tax (19% IVA Colombia)
         taxable_amount = self.subtotal - self.discount_amount
-        self.tax_amount = taxable_amount * Decimal('0.16')
+        self.tax_amount = taxable_amount * Decimal('0.19')
 
         # Final total
         self.total = taxable_amount + self.tax_amount

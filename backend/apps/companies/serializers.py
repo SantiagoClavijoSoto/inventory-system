@@ -126,3 +126,70 @@ class CompanySimpleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Company
         fields = ['id', 'name', 'slug', 'primary_color', 'is_active']
+
+
+class SubscriptionListSerializer(serializers.ModelSerializer):
+    """Serializer for subscription listings with company info."""
+    company_id = serializers.IntegerField(source='company.id', read_only=True)
+    company_name = serializers.CharField(source='company.name', read_only=True)
+    company_email = serializers.EmailField(source='company.email', read_only=True)
+    company_is_active = serializers.BooleanField(source='company.is_active', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    billing_cycle_display = serializers.CharField(source='get_billing_cycle_display', read_only=True)
+    plan_display = serializers.CharField(source='get_plan_display', read_only=True)
+    is_active = serializers.BooleanField(read_only=True)
+    days_until_payment = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = Subscription
+        fields = [
+            'id', 'company_id', 'company_name', 'company_email', 'company_is_active',
+            'plan', 'plan_display', 'status', 'status_display',
+            'billing_cycle', 'billing_cycle_display',
+            'start_date', 'next_payment_date', 'trial_ends_at',
+            'amount', 'currency',
+            'is_active', 'days_until_payment',
+            'created_at', 'updated_at',
+        ]
+
+
+class CompanyAdminSerializer(serializers.Serializer):
+    """Serializer for company administrators list.
+
+    Used by SuperAdmin to view all company admins across the platform.
+    """
+    id = serializers.IntegerField()
+    email = serializers.EmailField()
+    first_name = serializers.CharField()
+    last_name = serializers.CharField()
+    full_name = serializers.CharField()
+    is_company_admin = serializers.BooleanField()
+    is_active = serializers.BooleanField()
+    created_at = serializers.DateTimeField()
+
+    # Company info
+    company_id = serializers.IntegerField(source='company.id')
+    company_name = serializers.CharField(source='company.name')
+    company_slug = serializers.CharField(source='company.slug')
+    company_plan = serializers.CharField(source='company.plan')
+    company_is_active = serializers.BooleanField(source='company.is_active')
+
+    # Role info
+    role_id = serializers.IntegerField(source='role.id', allow_null=True)
+    role_name = serializers.CharField(source='role.name', allow_null=True)
+    role_type = serializers.CharField(source='role.role_type', allow_null=True)
+
+    # Computed field: can this admin create roles for their company?
+    can_manage_roles = serializers.SerializerMethodField()
+
+    def get_can_manage_roles(self, obj):
+        """Check if this admin can manage roles for their company.
+
+        Company admins can create/edit roles for their company,
+        but cannot change their own admin role.
+        """
+        if obj.is_company_admin:
+            return True
+        if obj.role and obj.role.role_type == 'admin':
+            return True
+        return False

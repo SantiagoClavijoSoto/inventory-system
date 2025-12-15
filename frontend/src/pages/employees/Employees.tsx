@@ -32,14 +32,12 @@ import {
   RefreshCw,
   Clock,
   UserCheck,
-  UserX,
   Calendar,
-  Mail,
   Phone,
   Building2,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import type { Employee, Branch, CreateEmployeeRequest, UpdateEmployeeRequest } from '@/types'
+import type { Employee, CreateEmployeeRequest, UpdateEmployeeRequest } from '@/types'
 
 const EMPLOYMENT_TYPE_OPTIONS = [
   { value: 'full_time', label: 'Tiempo completo' },
@@ -57,7 +55,7 @@ const STATUS_OPTIONS = [
 
 export function Employees() {
   const queryClient = useQueryClient()
-  const { currentBranch } = useAuthStore()
+  useAuthStore()
 
   // State
   const [search, setSearch] = useState('')
@@ -85,7 +83,7 @@ export function Employees() {
 
   const { data: branches } = useQuery({
     queryKey: ['branches-simple'],
-    queryFn: () => branchesApi.getSimpleList(),
+    queryFn: () => branchesApi.getSimple(),
   })
 
   // Mutations
@@ -409,7 +407,7 @@ interface EmployeeFormModalProps {
   isOpen: boolean
   onClose: () => void
   employee: Employee | null
-  branches: Branch[]
+  branches: Array<{ id: number; name: string }>
 }
 
 function EmployeeFormModal({ isOpen, onClose, employee, branches }: EmployeeFormModalProps) {

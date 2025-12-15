@@ -211,6 +211,7 @@ class ProductViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
         Search products for POS with stock info.
         Returns products with branch-specific stock levels.
         Only returns products belonging to the same company as the branch.
+        Only returns products that have stock configured for the branch.
         """
         from apps.branches.models import Branch
 
@@ -235,9 +236,18 @@ class ProductViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
+        # Get product IDs that have stock in this branch (with available quantity > 0)
+        products_with_stock = BranchStock.objects.filter(
+            branch_id=branch_id,
+            quantity__gt=0  # Only show products with actual stock
+        ).values_list('product_id', flat=True)
+
         # Search by name, SKU, or barcode - filtered by branch's company
+        # AND only products that have BranchStock for this branch
         products = self.get_queryset().filter(
-            is_active=True
+            is_active=True,
+            is_sellable=True,
+            id__in=products_with_stock
         ).filter(
             Q(name__icontains=search) |
             Q(sku__icontains=search) |
@@ -253,16 +263,12 @@ class ProductViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
         # Build response with stock info for each product
         result = []
         for product in products:
-            try:
-                branch_stock = BranchStock.objects.get(
-                    product=product,
-                    branch_id=branch_id
-                )
-                stock_quantity = branch_stock.quantity
-                available_quantity = branch_stock.available_quantity
-            except BranchStock.DoesNotExist:
-                stock_quantity = 0
-                available_quantity = 0
+            branch_stock = BranchStock.objects.get(
+                product=product,
+                branch_id=branch_id
+            )
+            stock_quantity = branch_stock.quantity
+            available_quantity = branch_stock.available_quantity
 
             serializer = ProductDetailSerializer(product)
             result.append({

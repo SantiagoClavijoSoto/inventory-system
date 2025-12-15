@@ -13,8 +13,20 @@ class Alert(TimestampMixin, models.Model):
     """
     System-generated alert for various events.
     Tracks stock levels, anomalies, and important notifications.
+    Multi-tenant: alerts belong to a specific company.
     """
+    # Multi-tenant: company association
+    company = models.ForeignKey(
+        'companies.Company',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='alerts',
+        verbose_name='Empresa'
+    )
+
     ALERT_TYPE_CHOICES = [
+        # Company-level alerts (for company admins)
         ('low_stock', 'Stock bajo'),
         ('out_of_stock', 'Sin stock'),
         ('overstock', 'Exceso de stock'),
@@ -23,6 +35,48 @@ class Alert(TimestampMixin, models.Model):
         ('sales_anomaly', 'Anomalía en ventas'),
         ('shift_overtime', 'Turno extendido'),
         ('system', 'Sistema'),
+        # Platform-level alerts (for superadmin) - Subscription related
+        ('subscription_payment_due', 'Pago próximo'),
+        ('subscription_overdue', 'Pago vencido'),
+        ('subscription_trial_ending', 'Prueba por terminar'),
+        ('subscription_cancelled', 'Suscripción cancelada'),
+        ('subscription_suspended', 'Suscripción suspendida'),
+        ('new_subscription', 'Nueva suscripción'),
+        ('subscription_plan_changed', 'Cambio de plan'),
+        # Platform-level alerts (for superadmin) - Business health
+        ('high_churn_rate', 'Alta tasa de cancelaciones'),
+        ('revenue_anomaly', 'Anomalía en ingresos'),
+        ('low_platform_activity', 'Baja actividad en plataforma'),
+        # Platform-level alerts (for superadmin) - Tenant health
+        ('tenant_limit_approaching', 'Tenant cerca del límite'),
+        ('tenant_inactive', 'Tenant inactivo'),
+        ('onboarding_stalled', 'Onboarding detenido'),
+        # Platform-level alerts (for superadmin) - System health
+        ('high_error_rate', 'Alta tasa de errores'),
+        ('system_performance', 'Rendimiento del sistema'),
+    ]
+
+    # Alert types that are platform-level (not company-specific)
+    PLATFORM_ALERT_TYPES = [
+        # Subscription related
+        'subscription_payment_due',
+        'subscription_overdue',
+        'subscription_trial_ending',
+        'subscription_cancelled',
+        'subscription_suspended',
+        'new_subscription',
+        'subscription_plan_changed',
+        # Business health
+        'high_churn_rate',
+        'revenue_anomaly',
+        'low_platform_activity',
+        # Tenant health
+        'tenant_limit_approaching',
+        'tenant_inactive',
+        'onboarding_stalled',
+        # System health
+        'high_error_rate',
+        'system_performance',
     ]
 
     SEVERITY_CHOICES = [
@@ -84,6 +138,14 @@ class Alert(TimestampMixin, models.Model):
         related_name='alerts',
         verbose_name='Empleado'
     )
+    subscription = models.ForeignKey(
+        'companies.Subscription',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='alerts',
+        verbose_name='Suscripción'
+    )
 
     # Status tracking
     status = models.CharField(
@@ -142,15 +204,24 @@ class Alert(TimestampMixin, models.Model):
         verbose_name_plural = 'Alertas'
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['alert_type', '-created_at']),
-            models.Index(fields=['status', '-created_at']),
-            models.Index(fields=['severity', '-created_at']),
+            models.Index(fields=['company', '-created_at']),
+            models.Index(fields=['company', 'alert_type', '-created_at']),
+            models.Index(fields=['company', 'status', '-created_at']),
+            models.Index(fields=['company', 'severity', '-created_at']),
+            models.Index(fields=['company', 'is_read', '-created_at']),
             models.Index(fields=['branch', '-created_at']),
-            models.Index(fields=['is_read', '-created_at']),
+            # Platform-level alert index (subscription alerts)
+            models.Index(fields=['alert_type', 'status', '-created_at']),
+            models.Index(fields=['subscription', '-created_at']),
         ]
 
     def __str__(self):
         return f"[{self.get_severity_display()}] {self.title}"
+
+    @property
+    def is_platform_alert(self) -> bool:
+        """Check if this alert is a platform-level alert (for superadmin)."""
+        return self.alert_type in self.PLATFORM_ALERT_TYPES
 
     def mark_as_read(self, user):
         """Mark alert as read by a user."""
@@ -189,7 +260,18 @@ class AlertConfiguration(TimestampMixin, models.Model):
     """
     Configuration for alert thresholds and preferences.
     Can be set globally, per branch, or per product category.
+    Multi-tenant: configurations belong to a specific company.
     """
+    # Multi-tenant: company association
+    company = models.ForeignKey(
+        'companies.Company',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='alert_configurations',
+        verbose_name='Empresa'
+    )
+
     SCOPE_CHOICES = [
         ('global', 'Global'),
         ('branch', 'Por sucursal'),
@@ -330,6 +412,11 @@ class UserAlertPreference(TimestampMixin, models.Model):
     receive_system_alerts = models.BooleanField(
         default=True,
         verbose_name='Recibir alertas del sistema'
+    )
+    # Platform-level alerts (for superadmin)
+    receive_subscription_alerts = models.BooleanField(
+        default=True,
+        verbose_name='Recibir alertas de suscripciones'
     )
 
     # Severity filter

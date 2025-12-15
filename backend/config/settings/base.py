@@ -200,6 +200,18 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
+# Celery Beat Schedule (default tasks)
+CELERY_BEAT_SCHEDULE = {
+    'generate-stock-alerts-every-15-minutes': {
+        'task': 'alerts.generate_stock_alerts',
+        'schedule': 60.0 * 15,  # Every 15 minutes
+    },
+    'auto-resolve-stock-alerts-every-30-minutes': {
+        'task': 'alerts.auto_resolve_stock_alerts',
+        'schedule': 60.0 * 30,  # Every 30 minutes
+    },
+}
+
 
 # DRF Spectacular (API Documentation)
 SPECTACULAR_SETTINGS = {

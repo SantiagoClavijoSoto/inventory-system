@@ -5,6 +5,7 @@ import type { Supplier, CreateSupplierRequest } from '@/types'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Badge } from '@/components/ui/Badge'
+import { formatCurrency } from '@/utils/formatters'
 import {
   Plus,
   Search,
@@ -212,7 +213,7 @@ export function Suppliers() {
             <div>
               <p className="text-sm text-secondary-500">Compras Totales</p>
               <p className="text-xl font-bold text-secondary-900">
-                ${suppliersData?.results?.reduce((sum, s) => sum + (s.total_purchases || 0), 0).toLocaleString() || 0}
+                {formatCurrency(suppliersData?.results?.reduce((sum, s) => sum + (s.total_purchases || 0), 0) || 0)}
               </p>
             </div>
           </div>
@@ -303,7 +304,7 @@ export function Suppliers() {
                       <div className="text-sm">
                         <div className="text-secondary-900">{supplier.payment_terms} días</div>
                         <div className="text-secondary-500">
-                          Límite: ${supplier.credit_limit.toLocaleString()}
+                          Límite: {formatCurrency(supplier.credit_limit)}
                         </div>
                       </div>
                     </td>
@@ -313,7 +314,7 @@ export function Suppliers() {
                           {supplier.purchase_orders_count || 0} órdenes
                         </div>
                         <div className="text-secondary-500">
-                          ${(supplier.total_purchases || 0).toLocaleString()}
+                          {formatCurrency(supplier.total_purchases || 0)}
                         </div>
                       </div>
                     </td>
@@ -745,7 +746,7 @@ function SupplierDetailModal({ supplier, onClose }: SupplierDetailModalProps) {
             <div className="bg-secondary-50 rounded-lg p-4">
               <p className="text-sm text-secondary-500">Monto Total</p>
               <p className="text-xl font-bold text-secondary-900">
-                ${(stats?.total_amount || 0).toLocaleString()}
+                {formatCurrency(stats?.total_amount || 0)}
               </p>
             </div>
             <div className="bg-warning-50 rounded-lg p-4">
@@ -799,7 +800,7 @@ function SupplierDetailModal({ supplier, onClose }: SupplierDetailModalProps) {
                   Crédito: {supplier.payment_terms} días
                 </p>
                 <p className="text-sm text-secondary-600">
-                  Límite: ${supplier.credit_limit.toLocaleString()}
+                  Límite: {formatCurrency(supplier.credit_limit)}
                 </p>
               </div>
             </div>
@@ -840,7 +841,7 @@ function SupplierDetailModal({ supplier, onClose }: SupplierDetailModalProps) {
                           <OrderStatusBadge status={order.status} />
                         </td>
                         <td className="px-4 py-2 text-right text-secondary-900">
-                          ${order.total.toLocaleString()}
+                          {formatCurrency(order.total)}
                         </td>
                       </tr>
                     ))}
@@ -859,11 +860,11 @@ function SupplierDetailModal({ supplier, onClose }: SupplierDetailModalProps) {
 
 // Order Status Badge Component
 function OrderStatusBadge({ status }: { status: string }) {
-  const variants: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'info' | 'secondary'> = {
+  const variants: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'primary' | 'secondary'> = {
     draft: 'secondary',
     pending: 'warning',
-    approved: 'info',
-    ordered: 'info',
+    approved: 'primary',
+    ordered: 'primary',
     partial: 'warning',
     received: 'success',
     cancelled: 'danger',

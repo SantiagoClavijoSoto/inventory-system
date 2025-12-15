@@ -22,8 +22,8 @@ const DEFAULT_BRANDING: BranchBranding = {
   primary_color: '#2563eb',
   secondary_color: '#64748b',
   accent_color: '#f59e0b',
-  tax_rate: 16,
-  currency: 'MXN',
+  tax_rate: 19,
+  currency: 'COP',
   currency_symbol: '$',
 }
 

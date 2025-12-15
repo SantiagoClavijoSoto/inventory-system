@@ -99,6 +99,26 @@ export interface Subscription {
   updated_at: string
 }
 
+export interface SubscriptionListItem extends Subscription {
+  company_id: number
+  company_name: string
+  company_email: string
+  company_is_active: boolean
+}
+
+export interface SubscriptionStats {
+  total_subscriptions: number
+  active_subscriptions: number
+  trial_subscriptions: number
+  past_due_subscriptions: number
+  cancelled_subscriptions: number
+  new_this_month: number
+  mrr: number
+  by_plan: Array<{ plan: CompanyPlan; count: number }>
+  by_status: Array<{ status: SubscriptionStatus; count: number }>
+  upcoming_payments: number
+}
+
 export interface Company {
   id: number
   name: string
@@ -434,14 +454,6 @@ export interface DailyCashRegister {
   notes?: string
   created_at: string
   updated_at: string
-}
-
-// Cart Types (for POS frontend)
-export interface CartItem {
-  product: Product
-  quantity: number
-  discount: number
-  customPrice?: number
 }
 
 // Employee Types

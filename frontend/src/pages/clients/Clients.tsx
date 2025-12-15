@@ -103,7 +103,7 @@ export function Clients() {
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return '-'
-    return new Date(dateString).toLocaleDateString('es-MX', {
+    return new Date(dateString).toLocaleDateString('es-CO', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',

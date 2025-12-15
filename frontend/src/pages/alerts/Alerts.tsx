@@ -9,6 +9,7 @@ import {
   type AlertStatus,
   type AlertType,
 } from '@/api/alerts'
+import { useIsPlatformAdmin } from '@/store/authStore'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import {
@@ -28,10 +29,23 @@ import {
   DollarSign,
   Clock,
   Settings,
+  CreditCard,
+  CalendarClock,
+  UserPlus,
+  Ban,
+  PauseCircle,
+  ArrowRightLeft,
+  TrendingDown,
+  Activity,
+  ArrowUp,
+  UserX,
+  AlertOctagon,
+  Gauge,
 } from 'lucide-react'
 
 export function Alerts() {
   const queryClient = useQueryClient()
+  const isPlatformAdmin = useIsPlatformAdmin()
   const [filters, setFilters] = useState<AlertListParams>({
     limit: 50,
   })
@@ -228,13 +242,27 @@ export function Alerts() {
             onChange={(e) => handleFilterChange('alert_type', e.target.value as AlertType)}
           >
             <option value="">Todos los tipos</option>
-            <option value="low_stock">Stock bajo</option>
-            <option value="out_of_stock">Sin stock</option>
-            <option value="overstock">Exceso de stock</option>
-            <option value="cash_difference">Diferencia de caja</option>
-            <option value="high_void_rate">Alta tasa de anulaciones</option>
-            <option value="shift_overtime">Turno extendido</option>
-            <option value="system">Sistema</option>
+            {isPlatformAdmin ? (
+              <>
+                <option value="subscription_payment_due">Pago próximo</option>
+                <option value="subscription_overdue">Pago vencido</option>
+                <option value="subscription_trial_ending">Prueba por terminar</option>
+                <option value="subscription_cancelled">Suscripción cancelada</option>
+                <option value="subscription_suspended">Suscripción suspendida</option>
+                <option value="new_subscription">Nueva suscripción</option>
+                <option value="subscription_plan_changed">Cambio de plan</option>
+              </>
+            ) : (
+              <>
+                <option value="low_stock">Stock bajo</option>
+                <option value="out_of_stock">Sin stock</option>
+                <option value="overstock">Exceso de stock</option>
+                <option value="cash_difference">Diferencia de caja</option>
+                <option value="high_void_rate">Alta tasa de anulaciones</option>
+                <option value="shift_overtime">Turno extendido</option>
+                <option value="system">Sistema</option>
+              </>
+            )}
           </select>
 
           <select
@@ -342,6 +370,7 @@ export function Alerts() {
         <PreferencesModal
           preferences={preferences}
           onClose={() => setShowPreferences(false)}
+          isPlatformAdmin={isPlatformAdmin}
         />
       )}
     </div>
@@ -414,6 +443,7 @@ function AlertItem({ alert, selected, onSelect, onView, onMarkRead }: AlertItemP
   }
 
   const typeIcons: Record<AlertType, React.ElementType> = {
+    // Company-level alerts
     low_stock: Package,
     out_of_stock: Package,
     overstock: Package,
@@ -422,6 +452,25 @@ function AlertItem({ alert, selected, onSelect, onView, onMarkRead }: AlertItemP
     sales_anomaly: AlertCircle,
     shift_overtime: Clock,
     system: Bell,
+    // Platform-level alerts - Subscription related
+    subscription_payment_due: CalendarClock,
+    subscription_overdue: CreditCard,
+    subscription_trial_ending: Clock,
+    subscription_cancelled: Ban,
+    subscription_suspended: PauseCircle,
+    new_subscription: UserPlus,
+    subscription_plan_changed: ArrowRightLeft,
+    // Platform-level alerts - Business health
+    high_churn_rate: TrendingDown,
+    revenue_anomaly: DollarSign,
+    low_platform_activity: Activity,
+    // Platform-level alerts - Tenant health
+    tenant_limit_approaching: ArrowUp,
+    tenant_inactive: UserX,
+    onboarding_stalled: Clock,
+    // Platform-level alerts - System health
+    high_error_rate: AlertOctagon,
+    system_performance: Gauge,
   }
 
   const config = severityConfig[alert.severity]
@@ -480,7 +529,7 @@ function AlertItem({ alert, selected, onSelect, onView, onMarkRead }: AlertItemP
             alert.status === 'resolved'
               ? 'success'
               : alert.status === 'acknowledged'
-              ? 'info'
+              ? 'primary'
               : alert.status === 'dismissed'
               ? 'secondary'
               : 'warning'
@@ -525,10 +574,10 @@ function AlertDetailModal({
 }: AlertDetailModalProps) {
   const [notes, setNotes] = useState('')
 
-  const severityBadge: Record<AlertSeverity, 'danger' | 'warning' | 'info' | 'secondary'> = {
+  const severityBadge: Record<AlertSeverity, 'danger' | 'warning' | 'primary' | 'secondary'> = {
     critical: 'danger',
     high: 'warning',
-    medium: 'info',
+    medium: 'primary',
     low: 'secondary',
   }
 
@@ -569,6 +618,25 @@ function AlertDetailModal({
                 <span className="ml-2 text-secondary-900">{alert.employee_name}</span>
               </div>
             )}
+            {/* Subscription info for platform alerts */}
+            {alert.subscription_company_name && (
+              <div>
+                <span className="text-secondary-500">Empresa:</span>
+                <span className="ml-2 text-secondary-900">{alert.subscription_company_name}</span>
+              </div>
+            )}
+            {alert.subscription_plan && (
+              <div>
+                <span className="text-secondary-500">Plan:</span>
+                <span className="ml-2 text-secondary-900 capitalize">{alert.subscription_plan}</span>
+              </div>
+            )}
+            {alert.subscription_status && (
+              <div>
+                <span className="text-secondary-500">Estado suscripción:</span>
+                <span className="ml-2 text-secondary-900 capitalize">{alert.subscription_status}</span>
+              </div>
+            )}
             <div>
               <span className="text-secondary-500">Fecha:</span>
               <span className="ml-2 text-secondary-900">
@@ -583,7 +651,7 @@ function AlertDetailModal({
                     alert.status === 'resolved'
                       ? 'success'
                       : alert.status === 'acknowledged'
-                      ? 'info'
+                      ? 'primary'
                       : 'warning'
                   }
                 >
@@ -654,13 +722,15 @@ interface PreferencesModalProps {
     receive_void_alerts: boolean
     receive_shift_alerts: boolean
     receive_system_alerts: boolean
+    receive_subscription_alerts?: boolean
     minimum_severity: AlertSeverity
     email_digest: boolean
   }
   onClose: () => void
+  isPlatformAdmin: boolean
 }
 
-function PreferencesModal({ preferences, onClose }: PreferencesModalProps) {
+function PreferencesModal({ preferences, onClose, isPlatformAdmin }: PreferencesModalProps) {
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
@@ -674,12 +744,23 @@ function PreferencesModal({ preferences, onClose }: PreferencesModalProps) {
         <div className="p-6 space-y-4">
           <div className="space-y-3">
             <h3 className="text-sm font-medium text-secondary-900">Tipos de Alertas</h3>
-            <PreferenceToggle label="Stock bajo" checked={preferences.receive_low_stock} />
-            <PreferenceToggle label="Sin stock" checked={preferences.receive_out_of_stock} />
-            <PreferenceToggle label="Diferencia de caja" checked={preferences.receive_cash_difference} />
-            <PreferenceToggle label="Anulaciones" checked={preferences.receive_void_alerts} />
-            <PreferenceToggle label="Turnos" checked={preferences.receive_shift_alerts} />
-            <PreferenceToggle label="Sistema" checked={preferences.receive_system_alerts} />
+            {isPlatformAdmin ? (
+              <>
+                <PreferenceToggle
+                  label="Alertas de suscripciones"
+                  checked={preferences.receive_subscription_alerts ?? true}
+                />
+              </>
+            ) : (
+              <>
+                <PreferenceToggle label="Stock bajo" checked={preferences.receive_low_stock} />
+                <PreferenceToggle label="Sin stock" checked={preferences.receive_out_of_stock} />
+                <PreferenceToggle label="Diferencia de caja" checked={preferences.receive_cash_difference} />
+                <PreferenceToggle label="Anulaciones" checked={preferences.receive_void_alerts} />
+                <PreferenceToggle label="Turnos" checked={preferences.receive_shift_alerts} />
+                <PreferenceToggle label="Sistema" checked={preferences.receive_system_alerts} />
+              </>
+            )}
           </div>
 
           <div className="pt-4 border-t border-secondary-200">

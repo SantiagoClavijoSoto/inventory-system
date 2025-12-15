@@ -25,6 +25,7 @@ from .serializers import (
 class AlertViewSet(viewsets.ModelViewSet):
     """
     ViewSet for managing alerts.
+    Multi-tenant: only shows alerts for user's company.
     """
     permission_classes = [IsAuthenticated, HasPermission]
     required_permission = 'alerts:view'
@@ -38,6 +39,12 @@ class AlertViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+
+        # Multi-tenant filter: only show alerts for user's company
+        user = self.request.user
+        if hasattr(user, 'company_id') and user.company_id:
+            queryset = queryset.filter(company_id=user.company_id)
+
         return queryset.select_related(
             'branch', 'product', 'employee', 'read_by', 'resolved_by'
         ).order_by('-created_at')
@@ -216,6 +223,7 @@ class AlertViewSet(viewsets.ModelViewSet):
 class AlertConfigurationViewSet(viewsets.ModelViewSet):
     """
     ViewSet for managing alert configurations.
+    Multi-tenant: only shows configurations for user's company.
     """
     permission_classes = [IsAuthenticated, HasPermission]
     required_permission = 'settings:edit'
@@ -224,6 +232,12 @@ class AlertConfigurationViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+
+        # Multi-tenant filter: only show configurations for user's company
+        user = self.request.user
+        if hasattr(user, 'company_id') and user.company_id:
+            queryset = queryset.filter(company_id=user.company_id)
+
         return queryset.select_related('branch', 'category')
 
     @extend_schema(

@@ -2,6 +2,7 @@ import { apiClient } from './client'
 
 // Types
 export type AlertType =
+  // Company-level alerts
   | 'low_stock'
   | 'out_of_stock'
   | 'overstock'
@@ -10,6 +11,60 @@ export type AlertType =
   | 'sales_anomaly'
   | 'shift_overtime'
   | 'system'
+  // Platform-level alerts (for SuperAdmin) - Subscription related
+  | 'subscription_payment_due'
+  | 'subscription_overdue'
+  | 'subscription_trial_ending'
+  | 'subscription_cancelled'
+  | 'subscription_suspended'
+  | 'new_subscription'
+  | 'subscription_plan_changed'
+  // Platform-level alerts (for SuperAdmin) - Business health
+  | 'high_churn_rate'
+  | 'revenue_anomaly'
+  | 'low_platform_activity'
+  // Platform-level alerts (for SuperAdmin) - Tenant health
+  | 'tenant_limit_approaching'
+  | 'tenant_inactive'
+  | 'onboarding_stalled'
+  // Platform-level alerts (for SuperAdmin) - System health
+  | 'high_error_rate'
+  | 'system_performance'
+
+// Platform alert types (for filtering in UI)
+export const PLATFORM_ALERT_TYPES: AlertType[] = [
+  // Subscription related
+  'subscription_payment_due',
+  'subscription_overdue',
+  'subscription_trial_ending',
+  'subscription_cancelled',
+  'subscription_suspended',
+  'new_subscription',
+  'subscription_plan_changed',
+  // Business health
+  'high_churn_rate',
+  'revenue_anomaly',
+  'low_platform_activity',
+  // Tenant health
+  'tenant_limit_approaching',
+  'tenant_inactive',
+  'onboarding_stalled',
+  // System health
+  'high_error_rate',
+  'system_performance',
+]
+
+// Company alert types (for filtering in UI)
+export const COMPANY_ALERT_TYPES: AlertType[] = [
+  'low_stock',
+  'out_of_stock',
+  'overstock',
+  'cash_difference',
+  'high_void_rate',
+  'sales_anomaly',
+  'shift_overtime',
+  'system',
+]
 
 export type AlertSeverity = 'low' | 'medium' | 'high' | 'critical'
 export type AlertStatus = 'active' | 'acknowledged' | 'resolved' | 'dismissed'
@@ -29,6 +84,11 @@ export interface Alert {
   product_sku?: string
   employee?: number
   employee_name?: string
+  // Subscription info (for platform alerts)
+  subscription?: number
+  subscription_company_name?: string
+  subscription_plan?: string
+  subscription_status?: string
   status: AlertStatus
   status_display: string
   is_read: boolean
@@ -90,6 +150,8 @@ export interface UserAlertPreference {
   receive_void_alerts: boolean
   receive_shift_alerts: boolean
   receive_system_alerts: boolean
+  // Platform-level alerts (SuperAdmin)
+  receive_subscription_alerts: boolean
   minimum_severity: AlertSeverity
   email_digest: boolean
 }

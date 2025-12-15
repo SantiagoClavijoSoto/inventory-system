@@ -1,20 +1,19 @@
 /**
- * Format a number as currency (Mexican Peso)
+ * Format a number as currency (Colombian Peso)
  */
 export function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('es-MX', {
-    style: 'currency',
-    currency: 'MXN',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+  const formatted = new Intl.NumberFormat('es-CO', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
   }).format(amount)
+  return `COP ${formatted}`
 }
 
 /**
  * Format a number with thousands separator
  */
 export function formatNumber(num: number, decimals = 0): string {
-  return new Intl.NumberFormat('es-MX', {
+  return new Intl.NumberFormat('es-CO', {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   }).format(num)
@@ -25,7 +24,7 @@ export function formatNumber(num: number, decimals = 0): string {
  */
 export function formatDate(date: string | Date, options?: Intl.DateTimeFormatOptions): string {
   const d = typeof date === 'string' ? new Date(date) : date
-  return d.toLocaleDateString('es-MX', options ?? {
+  return d.toLocaleDateString('es-CO', options ?? {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -37,7 +36,7 @@ export function formatDate(date: string | Date, options?: Intl.DateTimeFormatOpt
  */
 export function formatDateTime(date: string | Date): string {
   const d = typeof date === 'string' ? new Date(date) : date
-  return d.toLocaleString('es-MX', {
+  return d.toLocaleString('es-CO', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -51,7 +50,7 @@ export function formatDateTime(date: string | Date): string {
  */
 export function formatTime(date: string | Date): string {
   const d = typeof date === 'string' ? new Date(date) : date
-  return d.toLocaleTimeString('es-MX', {
+  return d.toLocaleTimeString('es-CO', {
     hour: '2-digit',
     minute: '2-digit',
   })

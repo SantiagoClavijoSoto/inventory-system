@@ -9,8 +9,9 @@ import {
   type DateRangeParams,
   type SalesPeriodParams,
 } from '@/api/reports'
-import { Button } from '@/components/ui/Button'
+// Button imported for future use
 import { Badge } from '@/components/ui/Badge'
+import { formatCurrency } from '@/utils/formatters'
 import {
   BarChart3,
   TrendingUp,
@@ -68,7 +69,7 @@ const getDateRange = (preset: string): { date_from: string; date_to: string } =>
 export function Reports() {
   const [activeTab, setActiveTab] = useState<ReportTab>('sales')
   const [datePreset, setDatePreset] = useState('month')
-  const [branchId, setBranchId] = useState<number | undefined>(undefined)
+  const [branchId] = useState<number | undefined>(undefined)
 
   const dateRange = useMemo(() => getDateRange(datePreset), [datePreset])
 
@@ -183,7 +184,7 @@ function SalesReport({ dateRange, branchId }: { dateRange: DateRangeParams; bran
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <MetricCard
           title="Ventas Hoy"
-          value={`$${(todaySummary?.total_sales || 0).toLocaleString()}`}
+          value={formatCurrency(todaySummary?.total_sales || 0)}
           change={comparison?.changes?.sales_change}
           icon={DollarSign}
           iconBg="bg-success-100"
@@ -199,7 +200,7 @@ function SalesReport({ dateRange, branchId }: { dateRange: DateRangeParams; bran
         />
         <MetricCard
           title="Ticket Promedio"
-          value={`$${(todaySummary?.average_ticket || 0).toLocaleString()}`}
+          value={formatCurrency(todaySummary?.average_ticket || 0)}
           change={comparison?.changes?.ticket_change}
           icon={BarChart3}
           iconBg="bg-warning-100"
@@ -259,7 +260,7 @@ function SalesReport({ dateRange, branchId }: { dateRange: DateRangeParams; bran
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-medium text-secondary-900">
-                      ${(item.total_amount || 0).toLocaleString()}
+                      {formatCurrency(item.total_amount || 0)}
                     </p>
                     <p className="text-xs text-secondary-500">{(item.percentage || 0).toFixed(1)}%</p>
                   </div>
@@ -302,7 +303,7 @@ function SalesReport({ dateRange, branchId }: { dateRange: DateRangeParams; bran
                       {product.quantity_sold} vendidos
                     </p>
                     <p className="text-xs text-secondary-500">
-                      ${(product.total_revenue || 0).toLocaleString()}
+                      {formatCurrency(product.total_revenue || 0)}
                     </p>
                   </div>
                 </div>
@@ -328,7 +329,7 @@ function SalesReport({ dateRange, branchId }: { dateRange: DateRangeParams; bran
                   <span className="text-sm text-secondary-700">{category.category_name}</span>
                   <div className="text-right">
                     <p className="text-sm font-medium text-secondary-900">
-                      ${(category.total_revenue || 0).toLocaleString()}
+                      {formatCurrency(category.total_revenue || 0)}
                     </p>
                     <p className="text-xs text-secondary-500">{(category.percentage || 0).toFixed(1)}%</p>
                   </div>
@@ -381,7 +382,7 @@ function InventoryReport({ branchId, dateRange }: { branchId?: number; dateRange
         />
         <MetricCard
           title="Valor en Stock"
-          value={`$${(summary?.total_stock_value || 0).toLocaleString()}`}
+          value={formatCurrency(summary?.total_stock_value || 0)}
           icon={DollarSign}
           iconBg="bg-success-100"
           iconColor="text-success-600"
@@ -427,7 +428,7 @@ function InventoryReport({ branchId, dateRange }: { branchId?: number; dateRange
                       {category.total_quantity} unidades
                     </p>
                     <p className="text-xs text-secondary-500">
-                      ${(category.stock_value || 0).toLocaleString()}
+                      {formatCurrency(category.stock_value || 0)}
                     </p>
                   </div>
                 </div>
@@ -604,17 +605,17 @@ function EmployeesReport({ dateRange, branchId }: { dateRange: DateRangeParams; 
                     </td>
                     <td className="py-2 text-secondary-600">{emp.branch_name}</td>
                     <td className="py-2 text-right font-medium text-secondary-900">
-                      ${emp.total_sales.toLocaleString()}
+                      {formatCurrency(emp.total_sales)}
                     </td>
-                    <td className="py-2 text-right text-secondary-600">{emp.transaction_count}</td>
+                    <td className="py-2 text-right text-secondary-600">{emp.transaction_count || 0}</td>
                     <td className="py-2 text-right text-secondary-600">
-                      ${emp.average_ticket.toLocaleString()}
+                      {formatCurrency(emp.average_ticket || 0)}
                     </td>
                     <td className="py-2 text-right text-secondary-600">
-                      {emp.hours_worked.toFixed(1)}h
+                      {(emp.hours_worked || 0).toFixed(1)}h
                     </td>
                     <td className="py-2 text-right font-medium text-success-600">
-                      ${emp.sales_per_hour.toLocaleString()}
+                      {formatCurrency(emp.sales_per_hour || 0)}
                     </td>
                   </tr>
                 ))}
@@ -657,7 +658,7 @@ function BranchesReport({ dateRange }: { dateRange: Omit<DateRangeParams, 'branc
     queryFn: () => branchReportsApi.getComparison(dateRange),
   })
 
-  const totalSales = comparison?.reduce((sum, b) => sum + b.total_sales, 0) || 0
+  const totalSales = comparison?.reduce((sum, b) => sum + (b.total_sales || 0), 0) || 0
 
   return (
     <div className="space-y-6">
@@ -687,31 +688,31 @@ function BranchesReport({ dateRange }: { dateRange: Omit<DateRangeParams, 'branc
                   <tr key={branch.branch_id}>
                     <td className="py-3 font-medium text-secondary-900">{branch.branch_name}</td>
                     <td className="py-3 text-right font-medium text-secondary-900">
-                      ${branch.total_sales.toLocaleString()}
+                      {formatCurrency(branch.total_sales)}
                     </td>
                     <td className="py-3 text-right text-secondary-600">
-                      {totalSales > 0 ? ((branch.total_sales / totalSales) * 100).toFixed(1) : 0}%
+                      {totalSales > 0 ? (((branch.total_sales || 0) / totalSales) * 100).toFixed(1) : 0}%
                     </td>
                     <td className="py-3 text-right text-secondary-600">
-                      {branch.transaction_count}
+                      {branch.transaction_count || 0}
                     </td>
                     <td className="py-3 text-right text-secondary-600">
-                      ${branch.average_ticket.toLocaleString()}
+                      {formatCurrency(branch.average_ticket || 0)}
                     </td>
                     <td className="py-3 text-right text-success-600">
-                      ${branch.total_profit.toLocaleString()}
+                      {formatCurrency(branch.total_profit || 0)}
                     </td>
                     <td className="py-3 text-right">
                       <Badge
                         variant={
-                          branch.profit_margin >= 30
+                          (branch.profit_margin || 0) >= 30
                             ? 'success'
-                            : branch.profit_margin >= 20
+                            : (branch.profit_margin || 0) >= 20
                             ? 'warning'
                             : 'danger'
                         }
                       >
-                        {branch.profit_margin.toFixed(1)}%
+                        {(branch.profit_margin || 0).toFixed(1)}%
                       </Badge>
                     </td>
                   </tr>
@@ -721,15 +722,15 @@ function BranchesReport({ dateRange }: { dateRange: Omit<DateRangeParams, 'branc
                 <tr>
                   <td className="py-3 font-bold text-secondary-900">Total</td>
                   <td className="py-3 text-right font-bold text-secondary-900">
-                    ${totalSales.toLocaleString()}
+                    {formatCurrency(totalSales)}
                   </td>
                   <td className="py-3 text-right font-bold text-secondary-600">100%</td>
                   <td className="py-3 text-right font-bold text-secondary-600">
-                    {comparison.reduce((sum, b) => sum + b.transaction_count, 0)}
+                    {comparison.reduce((sum, b) => sum + (b.transaction_count || 0), 0)}
                   </td>
                   <td className="py-3 text-right text-secondary-600">-</td>
                   <td className="py-3 text-right font-bold text-success-600">
-                    ${comparison.reduce((sum, b) => sum + b.total_profit, 0).toLocaleString()}
+                    {formatCurrency(comparison.reduce((sum, b) => sum + (b.total_profit || 0), 0))}
                   </td>
                   <td className="py-3"></td>
                 </tr>
@@ -755,38 +756,38 @@ function BranchesReport({ dateRange }: { dateRange: Omit<DateRangeParams, 'branc
                 <h4 className="font-medium text-secondary-900">{branch.branch_name}</h4>
                 <Badge
                   variant={
-                    branch.profit_margin >= 30
+                    (branch.profit_margin || 0) >= 30
                       ? 'success'
-                      : branch.profit_margin >= 20
+                      : (branch.profit_margin || 0) >= 20
                       ? 'warning'
                       : 'danger'
                   }
                 >
-                  {branch.profit_margin.toFixed(1)}% margen
+                  {(branch.profit_margin || 0).toFixed(1)}% margen
                 </Badge>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-xs text-secondary-500">Ventas</p>
                   <p className="text-lg font-bold text-secondary-900">
-                    ${branch.total_sales.toLocaleString()}
+                    {formatCurrency(branch.total_sales || 0)}
                   </p>
                 </div>
                 <div>
                   <p className="text-xs text-secondary-500">Utilidad</p>
                   <p className="text-lg font-bold text-success-600">
-                    ${branch.total_profit.toLocaleString()}
+                    {formatCurrency(branch.total_profit || 0)}
                   </p>
                 </div>
                 <div>
                   <p className="text-xs text-secondary-500">Transacciones</p>
                   <p className="text-sm font-medium text-secondary-700">
-                    {branch.transaction_count}
+                    {branch.transaction_count || 0}
                   </p>
                 </div>
                 <div>
                   <p className="text-xs text-secondary-500">Artículos</p>
-                  <p className="text-sm font-medium text-secondary-700">{branch.items_sold}</p>
+                  <p className="text-sm font-medium text-secondary-700">{branch.items_sold || 0}</p>
                 </div>
               </div>
             </div>
@@ -860,7 +861,7 @@ function SimpleBarChart({ data }: SimpleBarChartProps) {
               />
               {/* Tooltip */}
               <div className="absolute bottom-full mb-2 hidden group-hover:block bg-secondary-800 text-white text-xs px-2 py-1 rounded whitespace-nowrap z-10">
-                ${item.total_sales.toLocaleString()}
+                {formatCurrency(item.total_sales)}
               </div>
             </div>
             <span className="text-[10px] text-secondary-500 truncate w-full text-center">

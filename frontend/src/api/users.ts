@@ -156,31 +156,33 @@ export const usersApi = {
 export const rolesApi = {
   // Get all roles
   getAll: async (): Promise<Role[]> => {
-    const response = await apiClient.get('/roles/')
-    return response.data
+    const response = await apiClient.get('/auth/roles/')
+    // Handle both paginated and non-paginated responses
+    const data = response.data
+    return Array.isArray(data) ? data : (data.results || [])
   },
 
   // Get single role
   getById: async (id: number): Promise<Role> => {
-    const response = await apiClient.get(`/roles/${id}/`)
+    const response = await apiClient.get(`/auth/roles/${id}/`)
     return response.data
   },
 
   // Create role
   create: async (data: Partial<Role>): Promise<Role> => {
-    const response = await apiClient.post('/roles/', data)
+    const response = await apiClient.post('/auth/roles/', data)
     return response.data
   },
 
   // Update role
   update: async (id: number, data: Partial<Role>): Promise<Role> => {
-    const response = await apiClient.patch(`/roles/${id}/`, data)
+    const response = await apiClient.patch(`/auth/roles/${id}/`, data)
     return response.data
   },
 
   // Delete role
   delete: async (id: number): Promise<void> => {
-    await apiClient.delete(`/roles/${id}/`)
+    await apiClient.delete(`/auth/roles/${id}/`)
   },
 }
 
@@ -188,7 +190,9 @@ export const rolesApi = {
 export const permissionsApi = {
   // Get all permissions
   getAll: async (): Promise<Permission[]> => {
-    const response = await apiClient.get('/permissions/')
-    return response.data
+    const response = await apiClient.get('/auth/permissions/')
+    // Handle both paginated and non-paginated responses
+    const data = response.data
+    return Array.isArray(data) ? data : (data.results || [])
   },
 }

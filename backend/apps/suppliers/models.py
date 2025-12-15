@@ -192,7 +192,7 @@ class PurchaseOrder(TimestampMixin, models.Model):
             subtotal=Sum('subtotal')
         )
         self.subtotal = totals['subtotal'] or Decimal('0.00')
-        self.tax = self.subtotal * Decimal('0.16')  # 16% IVA
+        self.tax = self.subtotal * Decimal('0.19')  # 19% IVA Colombia
         self.total = self.subtotal + self.tax
         self.save()
 

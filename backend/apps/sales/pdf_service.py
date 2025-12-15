@@ -131,7 +131,7 @@ class ReceiptPDFService:
         if sale.discount_amount > 0:
             totals_data.append(['Descuento:', f"-{cls._format_currency(sale.discount_amount)}"])
 
-        totals_data.append(['IVA (16%):', cls._format_currency(sale.tax_amount)])
+        totals_data.append(['IVA (19%):', cls._format_currency(sale.tax_amount)])
         totals_data.append(['<b>TOTAL:</b>', f"<b>{cls._format_currency(sale.total)}</b>"])
 
         for row in totals_data:

@@ -1,11 +1,11 @@
-import { NavLink, useLocation } from 'react-router-dom'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/utils/cn'
 import { useAuthStore, useModulePermission, useIsPlatformAdmin } from '@/store/authStore'
 import { useThemeStore } from '@/store/themeStore'
 import {
   LayoutDashboard,
   Package,
-  ShoppingCart,
   Users,
   Truck,
   FileText,
@@ -14,6 +14,7 @@ import {
   Building,
   Bell,
   LogOut,
+  CreditCard,
 } from 'lucide-react'
 
 interface NavItem {
@@ -26,7 +27,6 @@ interface NavItem {
 // Navigation for regular company users (admins, employees)
 const regularNavigation: NavItem[] = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard, module: 'dashboard' },
-  { name: 'Punto de Venta', href: '/pos', icon: ShoppingCart, module: 'sales' },
   { name: 'Inventario', href: '/inventory', icon: Package, module: 'inventory' },
   { name: 'Empleados', href: '/employees', icon: Users, module: 'employees' },
   { name: 'Proveedores', href: '/suppliers', icon: Truck, module: 'suppliers' },
@@ -40,22 +40,33 @@ const regularNavigation: NavItem[] = [
 const superadminNavigation: NavItem[] = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard, module: 'dashboard' },
   { name: 'Clientes', href: '/clients', icon: Building, module: 'companies' },
-  { name: 'Inventario', href: '/inventory', icon: Package, module: 'inventory' },
+  { name: 'Suscripciones', href: '/subscriptions', icon: CreditCard, module: 'subscriptions' },
   { name: 'Alertas', href: '/alerts', icon: Bell, module: 'alerts' },
   { name: 'Configuración', href: '/settings', icon: Settings, module: 'settings' },
 ]
 
 export function Sidebar() {
   const location = useLocation()
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { user, logout } = useAuthStore()
-  const { branding } = useThemeStore()
+  const { branding, clearBranding } = useThemeStore()
   const isPlatformAdmin = useIsPlatformAdmin()
 
   // Select navigation based on user role
   const navigation = isPlatformAdmin ? superadminNavigation : regularNavigation
 
   const handleLogout = async () => {
+    // Clear all TanStack Query cache to prevent stale data between sessions
+    queryClient.clear()
+    // Reset branding/theme to defaults
+    clearBranding()
+    // Clear auth storage from localStorage
+    localStorage.removeItem('auth-storage')
+    // Perform logout
     await logout()
+    // Navigate to login page without any state (forces redirect to dashboard on next login)
+    navigate('/login', { replace: true, state: null })
   }
 
   // Get store name from branding or fallback

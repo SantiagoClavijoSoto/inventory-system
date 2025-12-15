@@ -1,17 +1,85 @@
 import { useState, useEffect, useRef } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import { useThemeStore } from '@/store/themeStore'
 import { branchesApi } from '@/api/branches'
-import { Bell, ChevronDown, Building2, Check, Loader2 } from 'lucide-react'
+import { alertsApi, type Alert, type AlertUnreadCount } from '@/api/alerts'
+import {
+  Bell,
+  ChevronDown,
+  Building2,
+  Check,
+  Loader2,
+  AlertTriangle,
+  Package,
+  XCircle,
+  Clock,
+  CheckCircle2,
+} from 'lucide-react'
 import type { Branch } from '@/types'
 
+// Severity colors and icons
+const severityConfig = {
+  critical: { color: 'text-danger-600', bg: 'bg-danger-100', icon: XCircle },
+  high: { color: 'text-danger-500', bg: 'bg-danger-50', icon: AlertTriangle },
+  medium: { color: 'text-warning-500', bg: 'bg-warning-50', icon: AlertTriangle },
+  low: { color: 'text-secondary-500', bg: 'bg-secondary-100', icon: Package },
+}
+
+const alertTypeIcons: Record<string, typeof Package> = {
+  low_stock: Package,
+  out_of_stock: XCircle,
+  overstock: Package,
+}
+
 export function Header() {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { user, currentBranch, setCurrentBranch } = useAuthStore()
   const { loadBranding, branding } = useThemeStore()
   const [showBranchSelector, setShowBranchSelector] = useState(false)
+  const [showNotifications, setShowNotifications] = useState(false)
   const [branches, setBranches] = useState<Branch[]>([])
   const [isLoadingBranches, setIsLoadingBranches] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const notificationRef = useRef<HTMLDivElement>(null)
+
+  // Fetch unread alert count
+  const { data: unreadCount } = useQuery<AlertUnreadCount>({
+    queryKey: ['alerts', 'unread-count', currentBranch?.id],
+    queryFn: () => alertsApi.getUnreadCount(currentBranch?.id),
+    refetchInterval: 30000, // Refetch every 30 seconds
+    enabled: !!currentBranch,
+  })
+
+  // Fetch recent alerts for dropdown
+  const { data: recentAlerts, isLoading: isLoadingAlerts } = useQuery<Alert[]>({
+    queryKey: ['alerts', 'recent', currentBranch?.id],
+    queryFn: () =>
+      alertsApi.getAll({
+        branch_id: currentBranch?.id,
+        status: 'active',
+        limit: 5,
+      }),
+    enabled: showNotifications && !!currentBranch,
+  })
+
+  // Mark as read mutation
+  const markAsReadMutation = useMutation({
+    mutationFn: alertsApi.markAsRead,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['alerts'] })
+    },
+  })
+
+  // Mark all as read mutation
+  const markAllAsReadMutation = useMutation({
+    mutationFn: () => alertsApi.markAllAsRead(currentBranch?.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['alerts'] })
+    },
+  })
 
   // Fetch branches on mount
   useEffect(() => {
@@ -35,11 +103,14 @@ export function Header() {
     fetchBranches()
   }, [])
 
-  // Close dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setShowBranchSelector(false)
+      }
+      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
+        setShowNotifications(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -53,8 +124,40 @@ export function Header() {
     await loadBranding(branch.id)
   }
 
+  const handleAlertClick = (alert: Alert) => {
+    // Mark as read if not already
+    if (!alert.is_read) {
+      markAsReadMutation.mutate(alert.id)
+    }
+    setShowNotifications(false)
+    // Navigate to alerts page
+    navigate('/alerts')
+  }
+
+  const handleViewAll = () => {
+    setShowNotifications(false)
+    navigate('/alerts')
+  }
+
+  const formatTimeAgo = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMs / 3600000)
+    const diffDays = Math.floor(diffMs / 86400000)
+
+    if (diffMins < 1) return 'Ahora'
+    if (diffMins < 60) return `Hace ${diffMins}m`
+    if (diffHours < 24) return `Hace ${diffHours}h`
+    return `Hace ${diffDays}d`
+  }
+
   // Get display name from branding or branch
   const displayBranchName = branding?.display_name || currentBranch?.name || 'Seleccionar sucursal'
+
+  // Calculate total unread
+  const totalUnread = unreadCount?.total || 0
 
   return (
     <header className="h-16 bg-white border-b border-secondary-200 flex items-center justify-between px-6">
@@ -122,10 +225,109 @@ export function Header() {
         </div>
 
         {/* Notifications */}
-        <button className="relative p-2 text-secondary-500 hover:text-secondary-700 hover:bg-secondary-100 rounded-lg transition-colors">
-          <Bell className="w-5 h-5" />
-          <span className="absolute top-1 right-1 w-2 h-2 bg-danger-500 rounded-full" />
-        </button>
+        <div className="relative" ref={notificationRef}>
+          <button
+            onClick={() => setShowNotifications(!showNotifications)}
+            className="relative p-2 text-secondary-500 hover:text-secondary-700 hover:bg-secondary-100 rounded-lg transition-colors"
+          >
+            <Bell className="w-5 h-5" />
+            {totalUnread > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center px-1 text-[10px] font-bold text-white bg-danger-500 rounded-full">
+                {totalUnread > 99 ? '99+' : totalUnread}
+              </span>
+            )}
+          </button>
+
+          {showNotifications && (
+            <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-lg border border-secondary-200 z-50">
+              {/* Header */}
+              <div className="px-4 py-3 border-b border-secondary-200 flex items-center justify-between">
+                <h3 className="font-semibold text-secondary-900">Notificaciones</h3>
+                {totalUnread > 0 && (
+                  <button
+                    onClick={() => markAllAsReadMutation.mutate()}
+                    disabled={markAllAsReadMutation.isPending}
+                    className="text-xs text-primary-600 hover:text-primary-700 font-medium"
+                  >
+                    {markAllAsReadMutation.isPending ? 'Marcando...' : 'Marcar todo como leído'}
+                  </button>
+                )}
+              </div>
+
+              {/* Alert List */}
+              <div className="max-h-96 overflow-y-auto">
+                {isLoadingAlerts ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-primary-600" />
+                  </div>
+                ) : !recentAlerts || recentAlerts.length === 0 ? (
+                  <div className="py-8 text-center">
+                    <CheckCircle2 className="w-10 h-10 mx-auto mb-2 text-success-500" />
+                    <p className="text-secondary-600 font-medium">¡Todo en orden!</p>
+                    <p className="text-sm text-secondary-400">No hay alertas activas</p>
+                  </div>
+                ) : (
+                  recentAlerts.map((alert) => {
+                    const config = severityConfig[alert.severity]
+                    const Icon = alertTypeIcons[alert.alert_type] || AlertTriangle
+                    return (
+                      <button
+                        key={alert.id}
+                        onClick={() => handleAlertClick(alert)}
+                        className={`w-full px-4 py-3 text-left border-b border-secondary-100 last:border-b-0 hover:bg-secondary-50 transition-colors ${
+                          !alert.is_read ? 'bg-primary-50/50' : ''
+                        }`}
+                      >
+                        <div className="flex gap-3">
+                          <div className={`p-2 rounded-lg ${config.bg}`}>
+                            <Icon className={`w-4 h-4 ${config.color}`} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className={`text-sm font-medium text-secondary-900 truncate ${!alert.is_read ? 'font-semibold' : ''}`}>
+                                {alert.title}
+                              </p>
+                              {!alert.is_read && (
+                                <span className="w-2 h-2 bg-primary-500 rounded-full flex-shrink-0" />
+                              )}
+                            </div>
+                            <p className="text-xs text-secondary-500 mt-0.5 line-clamp-2">
+                              {alert.message}
+                            </p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <Clock className="w-3 h-3 text-secondary-400" />
+                              <span className="text-[10px] text-secondary-400">
+                                {formatTimeAgo(alert.created_at)}
+                              </span>
+                              {alert.branch_name && (
+                                <>
+                                  <span className="text-secondary-300">•</span>
+                                  <span className="text-[10px] text-secondary-400">
+                                    {alert.branch_name}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    )
+                  })
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="px-4 py-3 border-t border-secondary-200">
+                <button
+                  onClick={handleViewAll}
+                  className="w-full text-center text-sm text-primary-600 hover:text-primary-700 font-medium"
+                >
+                  Ver todas las alertas
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* User Avatar */}
         <div className="flex items-center gap-3">

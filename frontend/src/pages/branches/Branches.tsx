@@ -4,7 +4,6 @@ import { useAuthStore } from '@/store/authStore'
 import {
   branchesApi,
   type Branch,
-  type BranchStats,
   type BranchListParams,
   type CreateBranchRequest,
 } from '@/api/branches'
@@ -40,6 +39,7 @@ import {
   RefreshCw,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { formatCurrency } from '@/utils/formatters'
 
 export function Branches() {
   const queryClient = useQueryClient()
@@ -138,7 +138,7 @@ export function Branches() {
     }
   }
 
-  const isAdmin = user?.is_superuser || user?.role === 'admin'
+  const isAdmin = user?.is_platform_admin || user?.role?.role_type === 'admin'
 
   return (
     <div className="space-y-6">
@@ -512,7 +512,7 @@ function BranchFormModal({
     city: '',
     state: '',
     postal_code: '',
-    country: 'México',
+    country: 'Colombia',
     phone: '',
     email: '',
     manager_name: '',
@@ -521,8 +521,8 @@ function BranchFormModal({
     is_main: false,
     opening_time: '09:00',
     closing_time: '18:00',
-    tax_rate: 16,
-    currency: 'MXN',
+    tax_rate: 19,
+    currency: 'COP',
     currency_symbol: '$',
   })
 
@@ -558,7 +558,7 @@ function BranchFormModal({
           city: '',
           state: '',
           postal_code: '',
-          country: 'México',
+          country: 'Colombia',
           phone: '',
           email: '',
           manager_name: '',
@@ -567,8 +567,8 @@ function BranchFormModal({
           is_main: false,
           opening_time: '09:00',
           closing_time: '18:00',
-          tax_rate: 16,
-          currency: 'MXN',
+          tax_rate: 19,
+          currency: 'COP',
           currency_symbol: '$',
         })
       }
@@ -814,7 +814,7 @@ function BranchDetailModal({
             <StatCard
               icon={<DollarSign className="h-5 w-5 text-success-500" />}
               label="Valor en Stock"
-              value={`${branch.currency_symbol}${(stats.total_stock_value || 0).toLocaleString()}`}
+              value={formatCurrency(stats.total_stock_value || 0)}
             />
             <StatCard
               icon={<Users className="h-5 w-5 text-secondary-500" />}
@@ -836,8 +836,7 @@ function BranchDetailModal({
               <CardContent className="pt-4">
                 <h4 className="text-sm font-medium text-secondary-500 mb-2">Ventas Hoy</h4>
                 <p className="text-2xl font-bold text-secondary-900">
-                  {branch.currency_symbol}
-                  {(stats.sales_amount_today || 0).toLocaleString()}
+                  {formatCurrency(stats.sales_amount_today || 0)}
                 </p>
                 <p className="text-sm text-secondary-500">{stats.sales_today} transacciones</p>
               </CardContent>
@@ -846,8 +845,7 @@ function BranchDetailModal({
               <CardContent className="pt-4">
                 <h4 className="text-sm font-medium text-secondary-500 mb-2">Ventas Este Mes</h4>
                 <p className="text-2xl font-bold text-secondary-900">
-                  {branch.currency_symbol}
-                  {(stats.sales_amount_this_month || 0).toLocaleString()}
+                  {formatCurrency(stats.sales_amount_this_month || 0)}
                 </p>
                 <p className="text-sm text-secondary-500">{stats.sales_this_month} transacciones</p>
               </CardContent>
