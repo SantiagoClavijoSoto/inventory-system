@@ -425,6 +425,7 @@ function PreferencesSettings() {
 // Users Management Component (Admin)
 function UsersSettings() {
   const queryClient = useQueryClient()
+  const isPlatformAdmin = useIsPlatformAdmin()
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
@@ -445,6 +446,13 @@ function UsersSettings() {
   const { data: branches } = useQuery({
     queryKey: ['branches-simple'],
     queryFn: branchesApi.getSimple,
+  })
+
+  // Fetch company admins only for platform admins
+  const { data: companyAdmins, isLoading: isLoadingAdmins } = useQuery({
+    queryKey: ['company-admins'],
+    queryFn: companiesApi.getAdmins,
+    enabled: isPlatformAdmin,
   })
 
   const deleteMutation = useMutation({
@@ -470,25 +478,47 @@ function UsersSettings() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <Input
-          placeholder="Buscar usuarios..."
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value)
-            setPage(1)
-          }}
-          className="w-64"
+      {/* Company Administrators Section (SuperAdmin only) */}
+      {isPlatformAdmin && (
+        <CompanyAdminsSection
+          admins={companyAdmins || []}
+          isLoading={isLoadingAdmins}
         />
-        <Button
-          onClick={() => {
-            setSelectedUser(null)
-            setIsFormModalOpen(true)
-          }}
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Nuevo Usuario
-        </Button>
+      )}
+
+      {/* Users Section */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-lg font-semibold text-secondary-900">
+            {isPlatformAdmin ? 'Usuarios del Sistema' : 'Usuarios'}
+          </h2>
+          <p className="text-sm text-secondary-500 mt-1">
+            {isPlatformAdmin
+              ? 'Gestiona los usuarios de la plataforma'
+              : 'Gestiona los usuarios de tu empresa'
+            }
+          </p>
+        </div>
+        <div className="flex items-center gap-4">
+          <Input
+            placeholder="Buscar usuarios..."
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value)
+              setPage(1)
+            }}
+            className="w-64"
+          />
+          <Button
+            onClick={() => {
+              setSelectedUser(null)
+              setIsFormModalOpen(true)
+            }}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Nuevo Usuario
+          </Button>
+        </div>
       </div>
 
       <Card>
