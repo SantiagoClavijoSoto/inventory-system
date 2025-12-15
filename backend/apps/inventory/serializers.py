@@ -71,6 +71,14 @@ class ProductListSerializer(serializers.ModelSerializer):
         ]
 
     def get_total_stock(self, obj):
+        branch_id = self.context.get('branch_id')
+        if branch_id:
+            from .models import BranchStock
+            try:
+                branch_stock = BranchStock.objects.get(product=obj, branch_id=branch_id)
+                return branch_stock.quantity
+            except BranchStock.DoesNotExist:
+                return 0
         return obj.get_total_stock()
 
 

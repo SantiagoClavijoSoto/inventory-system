@@ -3,7 +3,6 @@ import { Search, Package, AlertCircle } from 'lucide-react'
 import { Input, Spinner } from '@/components/ui'
 import { productApi } from '@/api/inventory'
 import type { Product } from '@/types'
-import { useBarcodeScanner } from '@/components/barcode/useBarcodeScanner'
 import { useAuthStore } from '@/store/authStore'
 import { formatCurrency } from '@/utils/formatters'
 
@@ -15,6 +14,7 @@ interface ProductSearchProps {
 interface SearchResult extends Product {
   stock_in_branch?: number
   available_in_branch?: number
+  total_stock?: number
 }
 
 export function ProductSearch({ onSelectProduct, onError }: ProductSearchProps) {
@@ -29,42 +29,7 @@ export function ProductSearch({ onSelectProduct, onError }: ProductSearchProps) 
 
   const currentBranch = useAuthStore((state) => state.currentBranch)
 
-  // Handle barcode scan (from USB scanner)
-  const handleBarcodeScan = useCallback(
-    async (barcode: string) => {
-      if (!currentBranch) {
-        onError?.('Selecciona una sucursal primero')
-        return
-      }
-
-      setIsLoading(true)
-      try {
-        const data = await productApi.getByBarcode(barcode, currentBranch.id)
-        if (data.product) {
-          onSelectProduct(data.product)
-          setSearchTerm('')
-          setResults([])
-          setShowResults(false)
-        }
-      } catch (error: unknown) {
-        const errorMsg = error instanceof Error ? error.message : 'Producto no encontrado'
-        onError?.(errorMsg)
-      } finally {
-        setIsLoading(false)
-      }
-    },
-    [currentBranch, onSelectProduct, onError]
-  )
-
-  // USB barcode scanner hook
-  useBarcodeScanner({
-    onScan: handleBarcodeScan,
-    enabled: true,
-    minLength: 4,
-    maxDelay: 50,
-  })
-
-  // Search products
+  // Search products by name or SKU
   const searchProducts = useCallback(
     async (term: string) => {
       if (!term || term.length < 2) {
@@ -75,36 +40,12 @@ export function ProductSearch({ onSelectProduct, onError }: ProductSearchProps) 
 
       setIsLoading(true)
       try {
-        // First try barcode search
-        if (currentBranch) {
-          try {
-            const barcodeResult = await productApi.getByBarcode(term, currentBranch.id)
-            if (barcodeResult.product) {
-              setResults([
-                {
-                  ...barcodeResult.product,
-                  stock_in_branch: barcodeResult.stock_in_branch,
-                  available_in_branch: barcodeResult.available_in_branch,
-                },
-              ])
-              setShowResults(true)
-              setSelectedIndex(0)
-              setIsLoading(false)
-              return
-            }
-          } catch {
-            // Not a barcode, continue with text search
-          }
-        }
-
-        // Text search with stock info for POS
         if (currentBranch) {
           const data = await productApi.searchForPOS(term, currentBranch.id)
           setResults(data)
           setShowResults(true)
           setSelectedIndex(data.length > 0 ? 0 : -1)
         } else {
-          // Fallback without branch - no stock info
           const data = await productApi.getAll({
             search: term,
             is_active: true,
@@ -218,9 +159,8 @@ export function ProductSearch({ onSelectProduct, onError }: ProductSearchProps) 
           onChange={(e) => handleSearchChange(e.target.value)}
           onKeyDown={handleKeyDown}
           onFocus={() => results.length > 0 && setShowResults(true)}
-          placeholder="Buscar producto por nombre, SKU o código de barras..."
+          placeholder="Buscar producto por nombre o SKU..."
           className="pl-10 pr-10 text-lg"
-          data-barcode-input="true"
           autoFocus
         />
         {isLoading && (
@@ -266,29 +206,23 @@ export function ProductSearch({ onSelectProduct, onError }: ProductSearchProps) 
                   <p className="font-medium text-secondary-900 truncate">
                     {product.name}
                   </p>
-                  <div className="flex items-center gap-2 text-sm text-secondary-500">
-                    <span className="font-mono">{product.sku}</span>
-                    {product.barcode && (
-                      <>
-                        <span>•</span>
-                        <span className="font-mono">{product.barcode}</span>
-                      </>
-                    )}
-                  </div>
+                  <p className="text-sm text-secondary-500 font-mono">
+                    {product.sku}
+                  </p>
                 </div>
                 <div className="text-right">
                   <p className="font-semibold text-secondary-900">
                     {formatCurrency(product.sale_price)}
                   </p>
-                  {product.available_in_branch !== undefined && (
+                  {product.total_stock !== undefined && (
                     <p
                       className={`text-sm ${
-                        product.available_in_branch > 0
+                        product.total_stock > 0
                           ? 'text-green-600'
                           : 'text-red-600'
                       }`}
                     >
-                      Stock: {product.available_in_branch}
+                      Stock: {product.total_stock}
                     </p>
                   )}
                 </div>
@@ -313,8 +247,6 @@ export function ProductSearch({ onSelectProduct, onError }: ProductSearchProps) 
           </kbd>
           seleccionar
         </span>
-        <span className="mx-2">•</span>
-        <span className="text-green-600">Escáner USB activo</span>
       </p>
     </div>
   )

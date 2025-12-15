@@ -3,18 +3,13 @@ import { Store, X, AlertTriangle, DollarSign } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { Button, Card, CardContent, Badge, Input, Modal, ModalFooter } from '@/components/ui'
 import { ProductSearch, Cart, PaymentModal, SaleSuccessModal } from '@/components/pos'
-import { BarcodeScanner } from '@/components/barcode/BarcodeScanner'
 import { useCartStore } from '@/store/cartStore'
 import { useAuthStore } from '@/store/authStore'
 import { saleApi, cashRegisterApi } from '@/api/sales'
-import { productApi } from '@/api/inventory'
 import { formatCurrency } from '@/utils/formatters'
 import type { Product, Sale, DailyCashRegister } from '@/types'
 
-type ScanMode = 'search' | 'camera'
-
 export function POS() {
-  const [scanMode, setScanMode] = useState<ScanMode>('search')
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -47,33 +42,13 @@ export function POS() {
     loadCashRegister()
   }, [currentBranch])
 
-  // Handle product selection (from search or barcode)
+  // Handle product selection from search
   const handleSelectProduct = useCallback(
     (product: Product) => {
       addItem(product, 1)
       toast.success(`${product.name} agregado al carrito`)
     },
     [addItem]
-  )
-
-  // Handle barcode scan (from camera mode)
-  const handleBarcodeScan = useCallback(
-    async (barcode: string) => {
-      if (!currentBranch) {
-        toast.error('Selecciona una sucursal primero')
-        return
-      }
-
-      try {
-        const data = await productApi.getByBarcode(barcode, currentBranch.id)
-        if (data.product) {
-          handleSelectProduct(data.product)
-        }
-      } catch {
-        toast.error('Producto no encontrado')
-      }
-    },
-    [currentBranch, handleSelectProduct]
   )
 
   // Handle checkout
@@ -223,30 +198,6 @@ export function POS() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Scan Mode Toggle */}
-          <div className="flex bg-secondary-100 rounded-lg p-1">
-            <button
-              onClick={() => setScanMode('search')}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                scanMode === 'search'
-                  ? 'bg-white text-secondary-900 shadow-sm'
-                  : 'text-secondary-600 hover:text-secondary-900'
-              }`}
-            >
-              Búsqueda
-            </button>
-            <button
-              onClick={() => setScanMode('camera')}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                scanMode === 'camera'
-                  ? 'bg-white text-secondary-900 shadow-sm'
-                  : 'text-secondary-600 hover:text-secondary-900'
-              }`}
-            >
-              Cámara
-            </button>
-          </div>
-
           {/* Clear Cart */}
           {getItemCount() > 0 && (
             <Button
@@ -291,59 +242,44 @@ export function POS() {
 
       {/* Main Content */}
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6 min-h-0">
-        {/* Left Panel - Search/Scanner */}
+        {/* Left Panel - Product Search */}
         <div className="lg:col-span-2 flex flex-col min-h-0">
           <Card className="flex-1 flex flex-col min-h-0">
             <CardContent className="flex-1 flex flex-col p-4 min-h-0">
-              {scanMode === 'search' ? (
-                <div className="space-y-4">
-                  <ProductSearch
-                    onSelectProduct={handleSelectProduct}
-                    onError={handleError}
-                  />
+              <div className="space-y-4">
+                <ProductSearch
+                  onSelectProduct={handleSelectProduct}
+                  onError={handleError}
+                />
 
-                  {/* Quick Tips */}
-                  <div className="bg-secondary-50 rounded-lg p-4">
-                    <h3 className="font-medium text-secondary-900 mb-2">
-                      Consejos rápidos
-                    </h3>
-                    <ul className="text-sm text-secondary-600 space-y-1">
-                      <li>
-                        • Usa el escáner USB para agregar productos automáticamente
-                      </li>
-                      <li>
-                        • Escribe el nombre, SKU o código de barras para buscar
-                      </li>
-                      <li>
-                        • Usa las flechas ↑↓ para navegar y Enter para seleccionar
-                      </li>
-                      <li>
-                        • Cambia al modo cámara si no tienes escáner USB
-                      </li>
-                    </ul>
-                  </div>
+                {/* Quick Tips */}
+                <div className="bg-secondary-50 rounded-lg p-4">
+                  <h3 className="font-medium text-secondary-900 mb-2">
+                    Consejos rápidos
+                  </h3>
+                  <ul className="text-sm text-secondary-600 space-y-1">
+                    <li>
+                      • Escribe el nombre o SKU del producto para buscar
+                    </li>
+                    <li>
+                      • Usa las flechas ↑↓ para navegar y Enter para seleccionar
+                    </li>
+                    <li>
+                      • Puedes buscar por nombre parcial o código SKU completo
+                    </li>
+                  </ul>
+                </div>
 
-                  {/* Recent Products - Could be implemented */}
-                  <div>
-                    <h3 className="font-medium text-secondary-900 mb-2">
-                      Productos frecuentes
-                    </h3>
-                    <p className="text-sm text-secondary-500">
-                      Los productos más vendidos aparecerán aquí
-                    </p>
-                  </div>
+                {/* Recent Products - Could be implemented */}
+                <div>
+                  <h3 className="font-medium text-secondary-900 mb-2">
+                    Productos frecuentes
+                  </h3>
+                  <p className="text-sm text-secondary-500">
+                    Los productos más vendidos aparecerán aquí
+                  </p>
                 </div>
-              ) : (
-                <div className="flex-1 flex flex-col min-h-0">
-                  <BarcodeScanner
-                    onScan={handleBarcodeScan}
-                    onError={handleError}
-                    showModeSelector={false}
-                    defaultMode="camera"
-                    className="flex-1"
-                  />
-                </div>
-              )}
+              </div>
             </CardContent>
           </Card>
         </div>

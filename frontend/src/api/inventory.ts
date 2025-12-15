@@ -10,12 +10,6 @@ import type {
 // Types for API responses
 interface ProductListResponse extends PaginatedResponse<Product> {}
 
-interface BarcodeSearchResponse {
-  product: Product
-  stock_in_branch: number
-  available_in_branch: number
-}
-
 interface StockAdjustmentRequest {
   product_id: number
   branch_id: number
@@ -48,6 +42,7 @@ interface ProductFilters {
   ordering?: string
   page?: number
   page_size?: number
+  branch?: number
 }
 
 // Category API
@@ -102,14 +97,6 @@ export const productApi = {
 
   getById: async (id: number) => {
     const response = await apiClient.get<Product>(`/products/${id}/`)
-    return response.data
-  },
-
-  getByBarcode: async (code: string, branchId: number) => {
-    const response = await apiClient.get<BarcodeSearchResponse>(
-      `/products/barcode/${code}/`,
-      { params: { branch_id: branchId } }
-    )
     return response.data
   },
 

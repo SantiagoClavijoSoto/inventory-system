@@ -96,6 +96,13 @@ class ProductViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
             return ProductCreateUpdateSerializer
         return ProductDetailSerializer
 
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        branch_id = self.request.query_params.get('branch')
+        if branch_id:
+            context['branch_id'] = int(branch_id)
+        return context
+
     def perform_destroy(self, instance):
         # Soft delete
         instance.is_deleted = True
@@ -262,6 +269,7 @@ class ProductViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
                 **serializer.data,
                 'stock_in_branch': stock_quantity,
                 'available_in_branch': available_quantity,
+                'total_stock': product.get_total_stock(),
             })
 
         return Response(result)

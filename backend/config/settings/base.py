@@ -92,6 +92,11 @@ DATABASE_URL = os.environ.get('DATABASE_URL', 'mysql://root:rootpassword@localho
 DATABASES = {
     'default': dj_database_url.parse(DATABASE_URL)
 }
+DATABASES['default'].setdefault('OPTIONS', {})
+DATABASES['default']['OPTIONS']['read_default_file'] = ''
+DATABASES['default']['OPTIONS']['charset'] = 'utf8mb4'
+if DATABASES['default'].get('HOST') in ('localhost', ''):
+    DATABASES['default']['HOST'] = '127.0.0.1'
 
 
 # Password validation

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { productApi, categoryApi } from '@/api/inventory'
+import { useAuthStore } from '@/store/authStore'
 import {
   Card,
   CardContent,
@@ -34,6 +35,7 @@ import type { Product, Category, ProductUnit } from '@/types'
 
 export function Products() {
   const queryClient = useQueryClient()
+  const currentBranch = useAuthStore((state) => state.currentBranch)
 
   // State
   const [search, setSearch] = useState('')
@@ -46,7 +48,7 @@ export function Products() {
 
   // Queries
   const { data: productsData, isLoading } = useQuery({
-    queryKey: ['products', { search, category: categoryFilter, status: statusFilter, page }],
+    queryKey: ['products', { search, category: categoryFilter, status: statusFilter, page, branch: currentBranch?.id }],
     queryFn: () =>
       productApi.getAll({
         search: search || undefined,
@@ -54,6 +56,7 @@ export function Products() {
         is_active: statusFilter === 'active' ? true : statusFilter === 'inactive' ? false : undefined,
         page,
         page_size: 20,
+        branch: currentBranch?.id,
       }),
   })
 
