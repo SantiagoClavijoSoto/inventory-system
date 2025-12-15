@@ -57,6 +57,10 @@ class UserSerializer(serializers.ModelSerializer):
     permissions = serializers.SerializerMethodField()
     full_name = serializers.CharField(read_only=True)
     is_platform_admin = serializers.SerializerMethodField()
+    # Company info for SuperAdmin view
+    company_id = serializers.IntegerField(source='company.id', read_only=True, allow_null=True)
+    company_name = serializers.CharField(source='company.name', read_only=True, allow_null=True)
+    is_company_admin = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = User
@@ -64,7 +68,8 @@ class UserSerializer(serializers.ModelSerializer):
             'id', 'email', 'first_name', 'last_name', 'full_name',
             'phone', 'avatar', 'role', 'role_id', 'permissions',
             'default_branch', 'allowed_branches', 'is_active',
-            'is_platform_admin',
+            'is_platform_admin', 'is_company_admin',
+            'company_id', 'company_name',
             'created_at', 'updated_at', 'last_login'
         ]
         read_only_fields = ['created_at', 'updated_at', 'last_login']

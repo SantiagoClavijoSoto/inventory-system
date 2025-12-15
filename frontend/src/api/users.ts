@@ -33,6 +33,10 @@ export interface User {
   default_branch: number | null
   default_branch_name: string
   allowed_branches: number[]
+  // Company info (for SuperAdmin view)
+  company_id: number | null
+  company_name: string | null
+  is_company_admin: boolean
   created_at: string
   updated_at: string
 }

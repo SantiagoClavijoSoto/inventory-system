@@ -425,6 +425,7 @@ function PreferencesSettings() {
 // Users Management Component (Admin)
 function UsersSettings() {
   const queryClient = useQueryClient()
+  const isPlatformAdmin = useIsPlatformAdmin()
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
@@ -503,6 +504,7 @@ function UsersSettings() {
                 <TableRow>
                   <TableHead>Usuario</TableHead>
                   <TableHead>Email</TableHead>
+                  {isPlatformAdmin && <TableHead>Empresa</TableHead>}
                   <TableHead>Rol</TableHead>
                   <TableHead>Sucursal</TableHead>
                   <TableHead>Estado</TableHead>
@@ -512,8 +514,26 @@ function UsersSettings() {
               <TableBody>
                 {usersData?.results.map((user) => (
                   <TableRow key={user.id}>
-                    <TableCell className="font-medium">{user.full_name}</TableCell>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        {user.full_name}
+                        {user.is_company_admin && (
+                          <span title="Administrador de empresa">
+                            <Crown className="h-4 w-4 text-amber-500" />
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>{user.email}</TableCell>
+                    {isPlatformAdmin && (
+                      <TableCell>
+                        {user.company_name ? (
+                          <span className="text-secondary-700">{user.company_name}</span>
+                        ) : (
+                          <Badge variant="primary">Plataforma</Badge>
+                        )}
+                      </TableCell>
+                    )}
                     <TableCell>
                       <Badge variant="primary">{user.role_name || 'Sin rol'}</Badge>
                     </TableCell>
