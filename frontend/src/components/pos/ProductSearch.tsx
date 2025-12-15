@@ -159,7 +159,7 @@ export function ProductSearch({ onSelectProduct, onError }: ProductSearchProps) 
           onChange={(e) => handleSearchChange(e.target.value)}
           onKeyDown={handleKeyDown}
           onFocus={() => results.length > 0 && setShowResults(true)}
-          placeholder="Buscar producto por nombre o SKU..."
+          placeholder="Buscar producto por nombre o Código personalizado (SKU)..."
           className="pl-10 pr-10 text-lg"
           autoFocus
         />
@@ -214,15 +214,15 @@ export function ProductSearch({ onSelectProduct, onError }: ProductSearchProps) 
                   <p className="font-semibold text-secondary-900">
                     {formatCurrency(product.sale_price)}
                   </p>
-                  {product.total_stock !== undefined && (
+                  {product.stock_in_branch !== undefined && (
                     <p
                       className={`text-sm ${
-                        product.total_stock > 0
+                        product.stock_in_branch > 0
                           ? 'text-green-600'
                           : 'text-red-600'
                       }`}
                     >
-                      Stock: {product.total_stock}
+                      Stock: {product.stock_in_branch}
                     </p>
                   )}
                 </div>
