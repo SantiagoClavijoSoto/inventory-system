@@ -153,12 +153,13 @@ class Command(BaseCommand):
         ]
 
         for p in products_data:
+            # Prices multiplied by 100 to convert to COP (Colombian Pesos)
             product = Product.objects.create(
                 name=p['name'],
                 sku=p['sku'],
                 category=p['category'],
-                cost_price=Decimal(str(p['cost'])),
-                sale_price=Decimal(str(p['price'])),
+                cost_price=Decimal(str(p['cost'])) * 100,
+                sale_price=Decimal(str(p['price'])) * 100,
                 unit='unit',
                 is_active=True,
             )
@@ -296,12 +297,13 @@ class Command(BaseCommand):
         ]
 
         for p in products_data:
+            # Prices multiplied by 100 to convert to COP (Colombian Pesos)
             product = Product.objects.create(
                 name=p['name'],
                 sku=p['sku'],
                 category=p['category'],
-                cost_price=Decimal(str(p['cost'])),
-                sale_price=Decimal(str(p['price'])),
+                cost_price=Decimal(str(p['cost'])) * 100,
+                sale_price=Decimal(str(p['price'])) * 100,
                 unit='unit',
                 is_active=True,
             )
@@ -454,12 +456,13 @@ class Command(BaseCommand):
         ]
 
         for p in products_data:
+            # Prices multiplied by 100 to convert to COP (Colombian Pesos)
             product = Product.objects.create(
                 name=p['name'],
                 sku=p['sku'],
                 category=p['category'],
-                cost_price=Decimal(str(p['cost'])),
-                sale_price=Decimal(str(p['price'])),
+                cost_price=Decimal(str(p['cost'])) * 100,
+                sale_price=Decimal(str(p['price'])) * 100,
                 unit='unit',
                 is_active=True,
             )

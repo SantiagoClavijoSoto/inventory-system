@@ -297,19 +297,23 @@ class Command(BaseCommand):
         ]
 
         for p in products_data:
+            # Prices multiplied by 100 to convert to COP (Colombian Pesos)
             product = Product.objects.create(
                 company=company,
                 name=p['name'],
                 sku=p['sku'],
                 category=p['category'],
-                cost_price=Decimal(str(p['cost'])),
-                sale_price=Decimal(str(p['price'])),
+                cost_price=Decimal(str(p['cost'])) * 100,
+                sale_price=Decimal(str(p['price'])) * 100,
                 unit='unit',
                 min_stock=10,
                 max_stock=100,
                 is_active=True,
             )
-            BranchStock.objects.create(branch=branch, product=product, quantity=50)
+            BranchStock.objects.update_or_create(
+                branch=branch, product=product,
+                defaults={'quantity': 50}
+            )
 
         # Create Suppliers
         Supplier.objects.create(
@@ -542,21 +546,28 @@ class Command(BaseCommand):
         ]
 
         for p in products_data:
+            # Prices multiplied by 100 to convert to COP (Colombian Pesos)
             product = Product.objects.create(
                 company=company,
                 name=p['name'],
                 sku=p['sku'],
                 category=p['category'],
-                cost_price=Decimal(str(p['cost'])),
-                sale_price=Decimal(str(p['price'])),
+                cost_price=Decimal(str(p['cost'])) * 100,
+                sale_price=Decimal(str(p['price'])) * 100,
                 unit='unit',
                 min_stock=5,
                 max_stock=50,
                 is_active=True,
             )
             # Add stock to both branches
-            BranchStock.objects.create(branch=branch_matriz, product=product, quantity=25)
-            BranchStock.objects.create(branch=branch_norte, product=product, quantity=20)
+            BranchStock.objects.update_or_create(
+                branch=branch_matriz, product=product,
+                defaults={'quantity': 25}
+            )
+            BranchStock.objects.update_or_create(
+                branch=branch_norte, product=product,
+                defaults={'quantity': 20}
+            )
 
         # Create Suppliers
         Supplier.objects.create(
@@ -804,13 +815,14 @@ class Command(BaseCommand):
         ]
 
         for p in products_data:
+            # Prices multiplied by 100 to convert to COP (Colombian Pesos)
             product = Product.objects.create(
                 company=company,
                 name=p['name'],
                 sku=p['sku'],
                 category=p['category'],
-                cost_price=Decimal(str(p['cost'])),
-                sale_price=Decimal(str(p['price'])),
+                cost_price=Decimal(str(p['cost'])) * 100,
+                sale_price=Decimal(str(p['price'])) * 100,
                 unit='unit',
                 min_stock=20,
                 max_stock=200,
@@ -818,7 +830,10 @@ class Command(BaseCommand):
             )
             # Add stock to all branches
             for branch in branches.values():
-                BranchStock.objects.create(branch=branch, product=product, quantity=100)
+                BranchStock.objects.update_or_create(
+                    branch=branch, product=product,
+                    defaults={'quantity': 100}
+                )
 
         # Create Suppliers
         Supplier.objects.create(
