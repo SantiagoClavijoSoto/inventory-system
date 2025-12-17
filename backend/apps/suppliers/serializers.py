@@ -28,17 +28,23 @@ class SupplierListSerializer(serializers.ModelSerializer):
     """Serializer for supplier list view."""
     full_address = serializers.CharField(read_only=True)
     purchase_orders_count = serializers.SerializerMethodField()
+    total_purchases = serializers.SerializerMethodField()
 
     class Meta:
         model = Supplier
         fields = [
             'id', 'name', 'code', 'contact_name', 'email', 'phone',
             'city', 'is_active', 'payment_terms', 'credit_limit',
-            'full_address', 'purchase_orders_count'
+            'full_address', 'purchase_orders_count', 'total_purchases'
         ]
 
     def get_purchase_orders_count(self, obj):
         return obj.purchase_orders.count()
+
+    def get_total_purchases(self, obj):
+        from django.db.models import Sum
+        total = obj.purchase_orders.aggregate(total=Sum('total'))['total']
+        return total or Decimal('0.00')
 
 
 class SupplierDetailSerializer(serializers.ModelSerializer):
@@ -63,9 +69,7 @@ class SupplierDetailSerializer(serializers.ModelSerializer):
 
     def get_total_purchases(self, obj):
         from django.db.models import Sum
-        total = obj.purchase_orders.filter(
-            status='received'
-        ).aggregate(total=Sum('total'))['total']
+        total = obj.purchase_orders.aggregate(total=Sum('total'))['total']
         return total or Decimal('0.00')
 
 
@@ -74,19 +78,39 @@ class CreateSupplierSerializer(serializers.ModelSerializer):
     class Meta:
         model = Supplier
         fields = [
-            'name', 'code', 'contact_name', 'email', 'phone', 'mobile',
+            'id', 'name', 'code', 'contact_name', 'email', 'phone', 'mobile',
             'address', 'city', 'state', 'postal_code', 'country',
             'tax_id', 'website', 'notes', 'payment_terms', 'credit_limit', 'is_active'
         ]
+        read_only_fields = ['id']
+
+    def _get_user_company(self):
+        """Get company from request user."""
+        request = self.context.get('request')
+        if request and hasattr(request, 'user'):
+            return getattr(request.user, 'company', None)
+        return None
 
     def validate_code(self, value):
-        """Ensure code is uppercase."""
-        return value.upper()
+        """Ensure code is uppercase and unique per company."""
+        value = value.upper()
+        company = self._get_user_company()
+        queryset = Supplier.active.filter(code=value)
+        if company:
+            queryset = queryset.filter(company=company)
+        if queryset.exists():
+            raise serializers.ValidationError("Ya existe un proveedor activo con este código")
+        return value
 
     def validate_email(self, value):
-        """Validate email is unique among active suppliers."""
-        if value and Supplier.active.filter(email=value).exists():
-            raise serializers.ValidationError("Ya existe un proveedor activo con este email")
+        """Validate email is unique among active suppliers in the same company."""
+        if value:
+            company = self._get_user_company()
+            queryset = Supplier.active.filter(email=value)
+            if company:
+                queryset = queryset.filter(company=company)
+            if queryset.exists():
+                raise serializers.ValidationError("Ya existe un proveedor activo con este email")
         return value
 
 
@@ -100,10 +124,20 @@ class UpdateSupplierSerializer(serializers.ModelSerializer):
             'tax_id', 'website', 'notes', 'payment_terms', 'credit_limit', 'is_active'
         ]
 
+    def _get_user_company(self):
+        """Get company from request user."""
+        request = self.context.get('request')
+        if request and hasattr(request, 'user'):
+            return getattr(request.user, 'company', None)
+        return None
+
     def validate_email(self, value):
-        """Validate email is unique among active suppliers."""
+        """Validate email is unique among active suppliers in the same company."""
         if value:
+            company = self._get_user_company()
             queryset = Supplier.active.filter(email=value)
+            if company:
+                queryset = queryset.filter(company=company)
             if self.instance:
                 queryset = queryset.exclude(pk=self.instance.pk)
             if queryset.exists():

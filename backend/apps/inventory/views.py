@@ -40,8 +40,12 @@ class CategoryViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
     ordering = ['name']
 
     def get_permissions(self):
-        if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [IsAuthenticated(), HasPermission('inventory:manage')]
+        if self.action == 'create':
+            return [IsAuthenticated(), HasPermission('inventory:create')]
+        if self.action in ['update', 'partial_update']:
+            return [IsAuthenticated(), HasPermission('inventory:edit')]
+        if self.action == 'destroy':
+            return [IsAuthenticated(), HasPermission('inventory:delete')]
         return [IsAuthenticated(), HasPermission('inventory:view')]
 
     def get_serializer_class(self):
@@ -85,8 +89,12 @@ class ProductViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
     ordering = ['name']
 
     def get_permissions(self):
-        if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [IsAuthenticated(), HasPermission('inventory:manage')]
+        if self.action == 'create':
+            return [IsAuthenticated(), HasPermission('inventory:create')]
+        if self.action in ['update', 'partial_update']:
+            return [IsAuthenticated(), HasPermission('inventory:edit')]
+        if self.action == 'destroy':
+            return [IsAuthenticated(), HasPermission('inventory:delete')]
         return [IsAuthenticated(), HasPermission('inventory:view')]
 
     def get_serializer_class(self):
@@ -285,7 +293,15 @@ class StockViewSet(viewsets.ViewSet):
     """
     ViewSet for stock operations: adjustments, transfers.
     """
-    permission_classes = [IsAuthenticated, HasPermission('inventory:manage')]
+    permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        if self.action == 'adjust':
+            return [IsAuthenticated(), HasPermission('inventory:edit')]
+        if self.action == 'transfer':
+            return [IsAuthenticated(), HasPermission('inventory:transfer')]
+        # by_branch is GET/view operation
+        return [IsAuthenticated(), HasPermission('inventory:view')]
 
     @action(detail=False, methods=['post'])
     def adjust(self, request):

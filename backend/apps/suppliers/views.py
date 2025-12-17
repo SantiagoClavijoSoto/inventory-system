@@ -5,7 +5,8 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.db.models import Q, Sum, Count
+from django.db import transaction
+from django.db.models import Q, Sum, Count, F
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, extend_schema_view
@@ -95,6 +96,10 @@ class SupplierViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
         else:
             self.permission_classes = [IsAuthenticated, HasPermission('suppliers:view')]
         return super().get_permissions()
+
+    def perform_create(self, serializer):
+        """Set company from authenticated user."""
+        serializer.save(company=self.request.user.company)
 
     def destroy(self, request, *args, **kwargs):
         """Soft delete a supplier."""
@@ -246,6 +251,7 @@ class PurchaseOrderViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
         return Response(PurchaseOrderDetailSerializer(order).data)
 
     @action(detail=True, methods=['post'])
+    @transaction.atomic
     def receive(self, request, pk=None):
         """Mark order as received and update inventory."""
         order = self.get_object()
@@ -269,9 +275,11 @@ class PurchaseOrderViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
         serializer = ReceiveItemSerializer(data=items_to_receive, many=True)
         serializer.is_valid(raise_exception=True)
 
+        from apps.inventory.models import BranchStock
+
         for item_data in serializer.validated_data:
-            item = get_object_or_404(
-                PurchaseOrderItem,
+            # Lock the item row to prevent race conditions
+            item = PurchaseOrderItem.objects.select_for_update().get(
                 id=item_data['item_id'],
                 purchase_order=order
             )
@@ -285,21 +293,24 @@ class PurchaseOrderViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # Update item quantity
-            item.quantity_received += quantity
-            item.save()
+            # Atomic update of item quantity using F() expression
+            PurchaseOrderItem.objects.filter(id=item.id).update(
+                quantity_received=F('quantity_received') + quantity
+            )
 
-            # Update inventory stock
-            from apps.inventory.models import Stock
-            stock, created = Stock.objects.get_or_create(
+            # Update inventory stock with lock
+            branch_stock, created = BranchStock.objects.select_for_update().get_or_create(
                 product=item.product,
-                branch=order.branch,
+                branch_id=order.branch_id,
                 defaults={'quantity': 0}
             )
-            stock.quantity += quantity
-            stock.save()
+            # Atomic update using F() expression
+            BranchStock.objects.filter(id=branch_stock.id).update(
+                quantity=F('quantity') + quantity
+            )
 
-        # Check if order is fully received
+        # Check if order is fully received - refresh items from DB
+        order.refresh_from_db()
         all_items = order.items.all()
         if all(item.is_fully_received for item in all_items):
             order.status = 'received'

@@ -165,6 +165,51 @@ class CompanyViewSet(viewsets.ModelViewSet):
         serializer = CompanyAdminSerializer(admins, many=True)
         return Response(serializer.data)
 
+    @extend_schema(
+        tags=['Empresas (Admin)'],
+        request={
+            'application/json': {
+                'type': 'object',
+                'properties': {
+                    'can_create_roles': {'type': 'boolean'}
+                }
+            }
+        },
+        responses={200: CompanyAdminSerializer}
+    )
+    @action(detail=False, methods=['patch'], url_path='admins/(?P<user_id>[^/.]+)/permissions')
+    def update_admin_permissions(self, request, user_id=None):
+        """Update permissions for a company administrator.
+
+        Allows SuperAdmin to enable/disable role creation permission
+        for company administrators.
+        """
+        try:
+            admin = User.objects.select_related('company', 'role').get(
+                id=user_id,
+                company__isnull=False
+            )
+        except User.DoesNotExist:
+            return Response(
+                {'error': 'Usuario no encontrado'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Check if user is actually an admin
+        if not (admin.is_company_admin or (admin.role and admin.role.role_type == 'admin')):
+            return Response(
+                {'error': 'El usuario no es administrador de empresa'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Update can_create_roles if provided
+        if 'can_create_roles' in request.data:
+            admin.can_create_roles = request.data['can_create_roles']
+            admin.save(update_fields=['can_create_roles'])
+
+        serializer = CompanyAdminSerializer(admin)
+        return Response(serializer.data)
+
 
 @extend_schema_view(
     list=extend_schema(tags=['Suscripciones (Admin)']),

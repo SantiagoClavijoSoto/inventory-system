@@ -5,10 +5,14 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Optional, List
 from django.db import transaction
-from django.db.models import F, Q, Count, Sum, Avg
+from django.db.models import F, Q, Count, Sum, Avg, OuterRef
 from django.utils import timezone
 
-from apps.inventory.models import BranchStock, Product
+from apps.inventory.models import (
+    BranchStock, Product,
+    STOCK_THRESHOLD_OK, STOCK_THRESHOLD_LOW,
+    STOCK_STATUS_OK, STOCK_STATUS_LOW, STOCK_STATUS_OUT
+)
 from apps.sales.models import Sale, DailyCashRegister
 from apps.employees.models import Shift
 from apps.branches.models import Branch
@@ -19,6 +23,9 @@ class AlertService:
     """
     Main service for alert CRUD operations.
     """
+
+    # Stock-related alert types that inventory users can see
+    STOCK_ALERT_TYPES = ['low_stock', 'out_of_stock']
 
     @staticmethod
     def get_alerts(
@@ -34,6 +41,10 @@ class AlertService:
         Get alerts filtered by various criteria.
         Multi-tenant: only returns alerts for user's company.
         SuperAdmin: only returns platform-level alerts (subscriptions).
+
+        Permission-based filtering:
+        - alerts:view: Access to all alert types
+        - inventory:view: Access to stock-related alerts only
         """
         queryset = Alert.objects.all()
 
@@ -48,6 +59,18 @@ class AlertService:
             queryset = queryset.filter(
                 company_id=user.company_id
             ).exclude(alert_type__in=Alert.PLATFORM_ALERT_TYPES)
+
+            # Permission-based filtering for non-admin users
+            # Users with only inventory:view see only stock alerts
+            has_alerts_view = user.has_permission('alerts:view') if hasattr(user, 'has_permission') else False
+            has_inventory_view = user.has_permission('inventory:view') if hasattr(user, 'has_permission') else False
+
+            if not has_alerts_view:
+                if has_inventory_view:
+                    queryset = queryset.filter(alert_type__in=AlertService.STOCK_ALERT_TYPES)
+                else:
+                    # No relevant permission - empty result
+                    queryset = queryset.none()
 
         if branch_id:
             queryset = queryset.filter(
@@ -76,6 +99,10 @@ class AlertService:
         Get count of unread alerts by severity.
         Multi-tenant: only counts alerts for user's company.
         SuperAdmin: only counts platform-level alerts (subscriptions).
+
+        Permission-based filtering:
+        - alerts:view: Count all alert types
+        - inventory:view: Count stock-related alerts only
         """
         queryset = Alert.objects.filter(is_read=False, status='active')
 
@@ -90,6 +117,16 @@ class AlertService:
             queryset = queryset.filter(
                 company_id=user.company_id
             ).exclude(alert_type__in=Alert.PLATFORM_ALERT_TYPES)
+
+            # Permission-based filtering for non-admin users
+            has_alerts_view = user.has_permission('alerts:view') if hasattr(user, 'has_permission') else False
+            has_inventory_view = user.has_permission('inventory:view') if hasattr(user, 'has_permission') else False
+
+            if not has_alerts_view:
+                if has_inventory_view:
+                    queryset = queryset.filter(alert_type__in=AlertService.STOCK_ALERT_TYPES)
+                else:
+                    queryset = queryset.none()
 
         if branch_id:
             queryset = queryset.filter(
@@ -294,15 +331,15 @@ class AlertGeneratorService:
         alerts.extend(cls.generate_shift_overtime_alerts())
         return alerts
 
-    # Fixed threshold for low stock alerts (5 products)
-    LOW_STOCK_THRESHOLD = 5
-
     @classmethod
     def generate_stock_alerts(cls) -> List[Alert]:
         """
         Generate alerts for low stock and out of stock products.
-        - Low stock: when quantity is between 1-5 products
-        - Out of stock: when quantity is 0 or less
+
+        Stock Status Thresholds:
+        - stock: >= 10 (healthy, no alert)
+        - stock-bajo: 4-9 (low_stock alert, severity: medium)
+        - sin-stock: <= 3 (out_of_stock alert, severity: high)
         """
         alerts = []
 
@@ -310,13 +347,13 @@ class AlertGeneratorService:
         branches = Branch.objects.filter(is_active=True, is_deleted=False)
 
         for branch in branches:
-            # Find low stock items (quantity between 1 and LOW_STOCK_THRESHOLD)
+            # Find low stock items: quantity between STOCK_THRESHOLD_LOW (4) and STOCK_THRESHOLD_OK-1 (9)
             low_stock_items = BranchStock.objects.filter(
                 branch=branch,
                 product__is_active=True,
                 product__is_deleted=False,
-                quantity__gt=0,
-                quantity__lte=cls.LOW_STOCK_THRESHOLD
+                quantity__gte=STOCK_THRESHOLD_LOW,  # >= 4
+                quantity__lt=STOCK_THRESHOLD_OK     # < 10
             ).select_related('product', 'branch')
 
             for item in low_stock_items:
@@ -330,32 +367,31 @@ class AlertGeneratorService:
 
                 if not existing:
                     alert = Alert.objects.create(
-                        company=branch.company,  # Multi-tenant: assign company from branch
+                        company=branch.company,
                         alert_type='low_stock',
                         severity='medium',
                         title=f'Stock bajo: {item.product.name}',
                         message=(
                             f'El producto "{item.product.name}" tiene stock bajo '
                             f'en {item.branch.name}. '
-                            f'Stock actual: {item.quantity} unidades. '
-                            f'Se requiere reabastecer pronto.'
+                            f'Stock actual: {item.quantity} unidades.'
                         ),
                         branch=item.branch,
                         product=item.product,
                         metadata={
                             'current_stock': item.quantity,
-                            'low_stock_threshold': cls.LOW_STOCK_THRESHOLD,
+                            'stock_status': STOCK_STATUS_LOW,
                             'product_sku': item.product.sku
                         }
                     )
                     alerts.append(alert)
 
-            # Find out of stock items
+            # Find out of stock items: quantity < STOCK_THRESHOLD_LOW (< 4, i.e., <= 3)
             out_of_stock_items = BranchStock.objects.filter(
                 branch=branch,
                 product__is_active=True,
                 product__is_deleted=False,
-                quantity__lte=0
+                quantity__lt=STOCK_THRESHOLD_LOW  # < 4 (i.e., 0, 1, 2, or 3)
             ).select_related('product', 'branch')
 
             for item in out_of_stock_items:
@@ -368,17 +404,20 @@ class AlertGeneratorService:
 
                 if not existing:
                     alert = Alert.objects.create(
-                        company=branch.company,  # Multi-tenant: assign company from branch
+                        company=branch.company,
                         alert_type='out_of_stock',
                         severity='high',
                         title=f'Sin stock: {item.product.name}',
                         message=(
                             f'El producto "{item.product.name}" está sin stock '
-                            f'en {item.branch.name}.'
+                            f'en {item.branch.name}. '
+                            f'Stock actual: {item.quantity} unidades.'
                         ),
                         branch=item.branch,
                         product=item.product,
                         metadata={
+                            'current_stock': item.quantity,
+                            'stock_status': STOCK_STATUS_OUT,
                             'product_sku': item.product.sku
                         }
                     )
@@ -545,11 +584,137 @@ class AlertGeneratorService:
         return alerts
 
     @classmethod
+    def generate_stock_alert_for_item(cls, branch_stock: 'BranchStock') -> Optional[Alert]:
+        """
+        Generate stock alert for a single BranchStock item.
+        Called from signal when stock changes.
+        Returns the created alert or None if no alert needed.
+
+        Stock Status Thresholds:
+        - stock: >= 10 (healthy, no alert)
+        - stock-bajo: 4-9 (low_stock alert, severity: medium)
+        - sin-stock: <= 3 (out_of_stock alert, severity: high)
+        """
+        # Skip if product is inactive or deleted
+        if not branch_stock.product.is_active or branch_stock.product.is_deleted:
+            return None
+
+        # Skip if branch is inactive or deleted
+        if not branch_stock.branch.is_active or branch_stock.branch.is_deleted:
+            return None
+
+        quantity = branch_stock.quantity
+        product = branch_stock.product
+        branch = branch_stock.branch
+
+        # Determine alert type based on quantity using global thresholds
+        # sin-stock: < 4 (0, 1, 2, 3) -> out_of_stock alert
+        # stock-bajo: >= 4 and < 10 (4, 5, 6, 7, 8, 9) -> low_stock alert
+        # stock: >= 10 -> no alert
+        if quantity < STOCK_THRESHOLD_LOW:  # < 4 (sin-stock)
+            alert_type = 'out_of_stock'
+            severity = 'high'
+            title = f'Sin stock: {product.name}'
+            message = (
+                f'El producto "{product.name}" está sin stock en {branch.name}. '
+                f'Stock actual: {quantity} unidades.'
+            )
+            stock_status = STOCK_STATUS_OUT
+        elif quantity < STOCK_THRESHOLD_OK:  # >= 4 and < 10 (stock-bajo)
+            alert_type = 'low_stock'
+            severity = 'medium'
+            title = f'Stock bajo: {product.name}'
+            message = (
+                f'El producto "{product.name}" tiene stock bajo en {branch.name}. '
+                f'Stock actual: {quantity} unidades.'
+            )
+            stock_status = STOCK_STATUS_LOW
+        else:  # >= 10 (stock healthy)
+            # Stock is healthy - check if we need to resolve existing alerts
+            cls._auto_resolve_stock_alert_for_item(branch_stock)
+            return None
+
+        # Check if alert already exists for this product/branch
+        existing = Alert.objects.filter(
+            alert_type=alert_type,
+            product=product,
+            branch=branch,
+            status='active'
+        ).exists()
+
+        if existing:
+            return None
+
+        # Also resolve any contradictory alerts
+        # e.g., if creating low_stock, resolve out_of_stock and vice versa
+        opposite_type = 'out_of_stock' if alert_type == 'low_stock' else 'low_stock'
+        Alert.objects.filter(
+            alert_type=opposite_type,
+            product=product,
+            branch=branch,
+            status='active'
+        ).update(
+            status='resolved',
+            resolved_at=timezone.now(),
+            resolution_notes='Resuelto automáticamente: cambio en nivel de stock'
+        )
+
+        # Create the alert
+        alert = Alert.objects.create(
+            company=branch.company,
+            alert_type=alert_type,
+            severity=severity,
+            title=title,
+            message=message,
+            branch=branch,
+            product=product,
+            metadata={
+                'current_stock': quantity,
+                'stock_status': stock_status,
+                'product_sku': product.sku
+            }
+        )
+
+        return alert
+
+    @classmethod
+    def _auto_resolve_stock_alert_for_item(cls, branch_stock: 'BranchStock') -> int:
+        """
+        Auto-resolve stock alerts for a single item when stock is replenished.
+        Called when stock goes to healthy level (>= STOCK_THRESHOLD_OK).
+
+        Stock Status Thresholds:
+        - Resolve alerts when quantity >= 10 (stock healthy)
+        """
+        # Only resolve if stock is at healthy level (>= 10)
+        if branch_stock.quantity < STOCK_THRESHOLD_OK:
+            return 0
+
+        now = timezone.now()
+        count = Alert.objects.filter(
+            alert_type__in=['low_stock', 'out_of_stock'],
+            product=branch_stock.product,
+            branch=branch_stock.branch,
+            status='active'
+        ).update(
+            status='resolved',
+            resolved_at=now,
+            resolution_notes='Resuelto automáticamente: stock repuesto'
+        )
+
+        return count
+
+    @classmethod
     def auto_resolve_stock_alerts(cls):
         """
         Automatically resolve stock alerts when stock is replenished.
-        - Resolves 'low_stock' when quantity > LOW_STOCK_THRESHOLD (5)
-        - Resolves 'out_of_stock' when quantity > 0
+        - Resolves 'low_stock' when quantity >= STOCK_THRESHOLD_OK (10)
+        - Resolves 'out_of_stock' when quantity >= STOCK_THRESHOLD_OK (10)
+
+        Stock Status Thresholds:
+        - stock: >= 10 (healthy, resolve all stock alerts)
+        - stock-bajo: 4-9 (keep low_stock alert, resolve out_of_stock)
+        - sin-stock: <= 3 (keep out_of_stock alert)
         """
         now = timezone.now()
 
@@ -569,13 +734,19 @@ class AlertGeneratorService:
                         branch=alert.branch
                     )
 
-                    # Check if stock is now above threshold
-                    # For low_stock: resolve when quantity > 5
-                    # For out_of_stock: resolve when quantity > 5 (has stock again)
-                    if stock.quantity > cls.LOW_STOCK_THRESHOLD:
+                    # Resolve alert when quantity reaches healthy level (>= 10)
+                    if stock.quantity >= STOCK_THRESHOLD_OK:
                         alert.status = 'resolved'
                         alert.resolved_at = now
                         alert.resolution_notes = 'Resuelto automáticamente: stock repuesto'
+                        alert.save(update_fields=['status', 'resolved_at', 'resolution_notes', 'updated_at'])
+                        resolved_count += 1
+                    # If out_of_stock alert and quantity is now in low_stock range,
+                    # resolve and let signal create a low_stock alert if needed
+                    elif alert.alert_type == 'out_of_stock' and stock.quantity >= STOCK_THRESHOLD_LOW:
+                        alert.status = 'resolved'
+                        alert.resolved_at = now
+                        alert.resolution_notes = 'Resuelto automáticamente: stock mejorado a nivel bajo'
                         alert.save(update_fields=['status', 'resolved_at', 'resolution_notes', 'updated_at'])
                         resolved_count += 1
 

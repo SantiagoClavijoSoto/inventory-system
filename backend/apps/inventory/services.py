@@ -259,7 +259,8 @@ class StockService:
         Returns:
             StockMovement record
         """
-        branch_stock, _ = BranchStock.objects.get_or_create(
+        # Use select_for_update to prevent race conditions when calculating 'set' adjustment
+        branch_stock, _ = BranchStock.objects.select_for_update().get_or_create(
             product=product,
             branch_id=branch_id,
             defaults={'quantity': 0}

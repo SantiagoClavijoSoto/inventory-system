@@ -179,14 +179,17 @@ class CompanyAdminSerializer(serializers.Serializer):
     role_name = serializers.CharField(source='role.name', allow_null=True)
     role_type = serializers.CharField(source='role.role_type', allow_null=True)
 
-    # Computed field: can this admin create roles for their company?
+    # Permission to create new roles (configurable by SuperAdmin)
+    can_create_roles = serializers.BooleanField()
+
+    # Computed field: can this admin manage (edit) roles for their company?
     can_manage_roles = serializers.SerializerMethodField()
 
     def get_can_manage_roles(self, obj):
-        """Check if this admin can manage roles for their company.
+        """Check if this admin can manage (edit) roles for their company.
 
-        Company admins can create/edit roles for their company,
-        but cannot change their own admin role.
+        Company admins can edit roles for their company.
+        Creating new roles depends on can_create_roles flag.
         """
         if obj.is_company_admin:
             return True

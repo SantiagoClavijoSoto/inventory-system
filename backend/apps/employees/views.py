@@ -107,13 +107,33 @@ class EmployeeViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
 
         data = serializer.validated_data
-        branch = get_object_or_404(Branch, id=data['branch_id'], is_active=True)
 
-        # Get role if provided
+        # Validate branch belongs to user's company (multi-tenant security)
+        user_company = request.user.company
+        if user_company:
+            branch = get_object_or_404(
+                Branch,
+                id=data['branch_id'],
+                is_active=True,
+                company=user_company
+            )
+        else:
+            # SuperAdmin can access any branch
+            branch = get_object_or_404(Branch, id=data['branch_id'], is_active=True)
+
+        # Get role if provided - validate it belongs to user's company
         role = None
         if data.get('role_id'):
             from apps.users.models import Role
-            role = get_object_or_404(Role, id=data['role_id'], is_active=True)
+            if user_company:
+                role = get_object_or_404(
+                    Role,
+                    id=data['role_id'],
+                    is_active=True,
+                    company=user_company
+                )
+            else:
+                role = get_object_or_404(Role, id=data['role_id'], is_active=True)
 
         try:
             employee = EmployeeService.create_employee(
@@ -124,6 +144,7 @@ class EmployeeViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
                 phone=data.get('phone', ''),
                 role=role,
                 branch=branch,
+                company=branch.company,  # Assign user to branch's company
                 position=data['position'],
                 department=data.get('department', ''),
                 employment_type=data.get('employment_type', 'full_time'),
@@ -333,7 +354,17 @@ class ShiftViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
         branch_id = serializer.validated_data.get('branch_id')
         branch = None
         if branch_id:
-            branch = get_object_or_404(Branch, id=branch_id, is_active=True)
+            # Validate branch belongs to user's company (multi-tenant security)
+            user_company = request.user.company
+            if user_company:
+                branch = get_object_or_404(
+                    Branch,
+                    id=branch_id,
+                    is_active=True,
+                    company=user_company
+                )
+            else:
+                branch = get_object_or_404(Branch, id=branch_id, is_active=True)
 
         try:
             shift = ShiftService.clock_in(employee=employee, branch=branch)
@@ -428,10 +459,8 @@ class ShiftViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
 
         if current_shift:
             return Response(ShiftSerializer(current_shift).data)
-        return Response(
-            {'message': 'No tiene turno activo'},
-            status=status.HTTP_404_NOT_FOUND
-        )
+        # Return 200 with null data instead of 404 - this is expected for "current" endpoints
+        return Response(None)
 
     @action(detail=False, methods=['get'])
     def daily_summary(self, request):
@@ -443,7 +472,12 @@ class ShiftViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        branch = get_object_or_404(Branch, id=branch_id)
+        # Validate branch belongs to user's company (multi-tenant security)
+        user_company = request.user.company
+        if user_company:
+            branch = get_object_or_404(Branch, id=branch_id, company=user_company)
+        else:
+            branch = get_object_or_404(Branch, id=branch_id)
 
         date_str = request.query_params.get('date')
         target_date = None

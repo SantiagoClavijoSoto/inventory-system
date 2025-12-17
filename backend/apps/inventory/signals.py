@@ -29,3 +29,16 @@ def create_branch_stock_for_new_product(sender, instance, created, **kwargs):
                 branch=branch,
                 defaults={'quantity': 0}
             )
+
+
+@receiver(post_save, sender=BranchStock)
+def generate_stock_alert_on_change(sender, instance, **kwargs):
+    """
+    Generate stock alerts in real-time when BranchStock quantity changes.
+    This ensures alerts are created immediately without waiting for Celery tasks.
+    """
+    # Import here to avoid circular imports
+    from apps.alerts.services import AlertGeneratorService
+
+    # Generate or resolve alert based on current stock level
+    AlertGeneratorService.generate_stock_alert_for_item(instance)

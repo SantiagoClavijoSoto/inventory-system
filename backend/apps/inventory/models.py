@@ -5,6 +5,19 @@ from decimal import Decimal
 from core.mixins import TimestampMixin, SoftDeleteMixin, ActiveManager
 
 
+# =============================================================================
+# Stock Status Thresholds (Global constants)
+# =============================================================================
+STOCK_THRESHOLD_OK = 10       # >= 10 = "stock" (nivel saludable)
+STOCK_THRESHOLD_LOW = 4       # 4-9 = "stock-bajo" (nivel bajo pero disponible)
+# <= 3 = "sin-stock" (crítico, requiere atención inmediata)
+
+# Stock status choices for consistency
+STOCK_STATUS_OK = 'stock'
+STOCK_STATUS_LOW = 'stock-bajo'
+STOCK_STATUS_OUT = 'sin-stock'
+
+
 class Category(TimestampMixin, SoftDeleteMixin, models.Model):
     """
     Product categories with hierarchical structure (parent-child).
@@ -214,6 +227,25 @@ class Product(TimestampMixin, SoftDeleteMixin, models.Model):
             total=models.Sum('quantity')
         )['total'] or 0
 
+    @property
+    def stock_status(self) -> str:
+        """
+        Calculate stock status based on total stock across all branches.
+        Returns: 'stock', 'stock-bajo', or 'sin-stock'
+
+        Thresholds:
+        - >= 10: 'stock' (healthy)
+        - 4-9: 'stock-bajo' (low but available)
+        - <= 3: 'sin-stock' (critical)
+        """
+        total = self.get_total_stock()
+        if total >= STOCK_THRESHOLD_OK:
+            return STOCK_STATUS_OK
+        elif total >= STOCK_THRESHOLD_LOW:
+            return STOCK_STATUS_LOW
+        else:
+            return STOCK_STATUS_OUT
+
 
 class BranchStock(TimestampMixin, models.Model):
     """
@@ -260,14 +292,32 @@ class BranchStock(TimestampMixin, models.Model):
         return max(0, self.quantity - self.reserved_quantity)
 
     @property
+    def stock_status(self) -> str:
+        """
+        Calculate stock status for this branch.
+        Returns: 'stock', 'stock-bajo', or 'sin-stock'
+
+        Thresholds:
+        - >= 10: 'stock' (healthy)
+        - 4-9: 'stock-bajo' (low but available)
+        - <= 3: 'sin-stock' (critical)
+        """
+        if self.quantity >= STOCK_THRESHOLD_OK:
+            return STOCK_STATUS_OK
+        elif self.quantity >= STOCK_THRESHOLD_LOW:
+            return STOCK_STATUS_LOW
+        else:
+            return STOCK_STATUS_OUT
+
+    @property
     def is_low_stock(self) -> bool:
-        """Check if stock is below minimum level"""
-        return self.quantity <= self.product.min_stock
+        """Check if stock is at low level (4-9 units)"""
+        return self.stock_status == STOCK_STATUS_LOW
 
     @property
     def is_out_of_stock(self) -> bool:
-        """Check if product is out of stock"""
-        return self.available_quantity <= 0
+        """Check if product is out of stock (<= 3 units)"""
+        return self.stock_status == STOCK_STATUS_OUT
 
 
 class StockMovement(TimestampMixin, models.Model):

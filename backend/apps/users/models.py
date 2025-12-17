@@ -72,7 +72,17 @@ class Role(TimestampMixin):
         ('viewer', 'Solo Lectura'),
     ]
 
-    name = models.CharField(max_length=50, unique=True, verbose_name='Nombre')
+    # Multi-tenant: company association
+    company = models.ForeignKey(
+        'companies.Company',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='roles',
+        verbose_name='Empresa',
+        help_text='Empresa a la que pertenece el rol. NULL para roles globales (SuperAdmin).'
+    )
+    name = models.CharField(max_length=50, verbose_name='Nombre')
     role_type = models.CharField(
         max_length=20,
         choices=ROLE_TYPES,
@@ -93,6 +103,12 @@ class Role(TimestampMixin):
         verbose_name = 'Rol'
         verbose_name_plural = 'Roles'
         ordering = ['name']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['company', 'name'],
+                name='unique_role_name_per_company'
+            )
+        ]
 
     def __str__(self):
         return self.name
@@ -221,6 +237,11 @@ class User(AbstractUser, TimestampMixin):
         default=False,
         verbose_name='Admin de empresa',
         help_text='Puede gestionar toda su empresa'
+    )
+    can_create_roles = models.BooleanField(
+        default=True,
+        verbose_name='Puede crear roles',
+        help_text='Permite crear nuevos roles (solo editar si es False)'
     )
 
     role = models.ForeignKey(

@@ -31,10 +31,15 @@ from .serializers import (
     destroy=extend_schema(tags=['Sucursales']),
 )
 class BranchViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
-    """ViewSet for branch management. Auto-filtered by company."""
+    """ViewSet for branch management. Auto-filtered by company.
+
+    Permission logic:
+    - list/retrieve/simple: Any authenticated user can see their allowed branches
+      (filtered by TenantQuerySetMixin + allowed_branches in get_queryset)
+    - create/update/destroy: Requires branches:edit permission
+    """
     queryset = Branch.active.all()
-    permission_classes = [IsAuthenticated, HasPermission]
-    required_permission = 'branches:view'
+    permission_classes = [IsAuthenticated]
     filterset_fields = ['is_active', 'is_main', 'city', 'state']
     search_fields = ['name', 'code', 'city']
     ordering_fields = ['name', 'code', 'created_at']
@@ -48,7 +53,12 @@ class BranchViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
         return BranchSerializer
 
     def get_permissions(self):
+        """
+        list/retrieve/simple/branding: Any authenticated user (filtered by allowed_branches)
+        create/update/destroy: Requires branches:edit permission
+        """
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            self.permission_classes = [IsAuthenticated, HasPermission]
             self.required_permission = 'branches:edit'
         return super().get_permissions()
 

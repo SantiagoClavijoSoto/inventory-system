@@ -8,6 +8,7 @@ from django.db.models import Sum, Count, Avg
 from django.utils import timezone
 
 from apps.users.models import User, Role
+from apps.companies.models import Company
 from apps.branches.models import Branch
 from apps.sales.models import Sale
 from .models import Employee, Shift
@@ -29,6 +30,7 @@ class EmployeeService:
         hire_date: date,
         phone: str = '',
         role: Role = None,
+        company: Company = None,
         department: str = '',
         employment_type: str = 'full_time',
         salary: Decimal = Decimal('0.00'),
@@ -48,6 +50,7 @@ class EmployeeService:
             hire_date: Employment start date
             phone: Contact phone (optional)
             role: User role for permissions (optional)
+            company: Company the employee belongs to (for multi-tenant isolation)
             department: Department name (optional)
             employment_type: Type of employment
             salary: Monthly salary
@@ -57,7 +60,11 @@ class EmployeeService:
         Returns:
             Created Employee instance
         """
-        # Create user
+        # Use branch's company if not explicitly provided
+        if company is None:
+            company = branch.company
+
+        # Create user with company assignment (multi-tenant)
         user = User.objects.create_user(
             email=email,
             password=password,
@@ -65,6 +72,7 @@ class EmployeeService:
             last_name=last_name,
             phone=phone,
             role=role,
+            company=company,
             default_branch=branch,
         )
 

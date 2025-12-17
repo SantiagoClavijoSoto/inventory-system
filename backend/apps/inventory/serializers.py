@@ -40,6 +40,7 @@ class BranchStockSerializer(serializers.ModelSerializer):
     branch_name = serializers.CharField(source='branch.name', read_only=True)
     branch_code = serializers.CharField(source='branch.code', read_only=True)
     available_quantity = serializers.ReadOnlyField()
+    stock_status = serializers.ReadOnlyField()
     is_low_stock = serializers.ReadOnlyField()
     is_out_of_stock = serializers.ReadOnlyField()
 
@@ -48,7 +49,7 @@ class BranchStockSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'branch', 'branch_name', 'branch_code',
             'quantity', 'reserved_quantity', 'available_quantity',
-            'is_low_stock', 'is_out_of_stock',
+            'stock_status', 'is_low_stock', 'is_out_of_stock',
             'updated_at'
         ]
         read_only_fields = ['updated_at']
@@ -59,6 +60,7 @@ class ProductListSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.name', read_only=True)
     supplier_name = serializers.CharField(source='supplier.name', read_only=True)
     total_stock = serializers.SerializerMethodField()
+    stock_status = serializers.SerializerMethodField()
     profit_margin = serializers.ReadOnlyField()
 
     class Meta:
@@ -66,7 +68,7 @@ class ProductListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'sku', 'barcode', 'category', 'category_name',
             'cost_price', 'sale_price', 'profit_margin', 'unit',
-            'min_stock', 'total_stock', 'is_active', 'is_sellable',
+            'min_stock', 'total_stock', 'stock_status', 'is_active', 'is_sellable',
             'supplier', 'supplier_name', 'image'
         ]
 
@@ -81,6 +83,21 @@ class ProductListSerializer(serializers.ModelSerializer):
                 return 0
         return obj.get_total_stock()
 
+    def get_stock_status(self, obj):
+        """Get stock status based on branch context or total stock"""
+        from .models import (
+            BranchStock, STOCK_THRESHOLD_OK, STOCK_THRESHOLD_LOW,
+            STOCK_STATUS_OK, STOCK_STATUS_LOW, STOCK_STATUS_OUT
+        )
+        branch_id = self.context.get('branch_id')
+        if branch_id:
+            try:
+                branch_stock = BranchStock.objects.get(product=obj, branch_id=branch_id)
+                return branch_stock.stock_status
+            except BranchStock.DoesNotExist:
+                return STOCK_STATUS_OUT
+        return obj.stock_status
+
 
 class ProductDetailSerializer(serializers.ModelSerializer):
     """Full serializer for product detail view"""
@@ -89,6 +106,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
     supplier_name = serializers.CharField(source='supplier.name', read_only=True)
     branch_stocks = BranchStockSerializer(many=True, read_only=True)
     total_stock = serializers.SerializerMethodField()
+    stock_status = serializers.ReadOnlyField()
     profit_margin = serializers.ReadOnlyField()
 
     class Meta:
@@ -100,7 +118,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
             'unit', 'min_stock', 'max_stock',
             'image', 'is_active', 'is_sellable',
             'supplier', 'supplier_name',
-            'branch_stocks', 'total_stock',
+            'branch_stocks', 'total_stock', 'stock_status',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['created_at', 'updated_at']
@@ -115,11 +133,12 @@ class ProductCreateUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = [
-            'name', 'description', 'sku', 'barcode',
+            'id', 'name', 'description', 'sku', 'barcode',
             'category', 'cost_price', 'sale_price',
             'unit', 'min_stock', 'max_stock',
             'image', 'is_active', 'is_sellable', 'supplier'
         ]
+        read_only_fields = ['id']
 
     def validate_sale_price(self, value):
         cost_price = self.initial_data.get('cost_price')

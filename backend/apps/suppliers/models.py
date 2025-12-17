@@ -23,9 +23,8 @@ class Supplier(TimestampMixin, SoftDeleteMixin, models.Model):
     name = models.CharField(max_length=200, verbose_name='Nombre')
     code = models.CharField(
         max_length=20,
-        unique=True,
         verbose_name='Código',
-        help_text='Código único del proveedor'
+        help_text='Código único del proveedor por empresa'
     )
     contact_name = models.CharField(
         max_length=100,
@@ -77,6 +76,12 @@ class Supplier(TimestampMixin, SoftDeleteMixin, models.Model):
         verbose_name = 'Proveedor'
         verbose_name_plural = 'Proveedores'
         ordering = ['name']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['company', 'code'],
+                name='unique_supplier_code_per_company'
+            )
+        ]
 
     def __str__(self):
         return f"{self.code} - {self.name}"

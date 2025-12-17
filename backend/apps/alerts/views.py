@@ -26,11 +26,45 @@ class AlertViewSet(viewsets.ModelViewSet):
     """
     ViewSet for managing alerts.
     Multi-tenant: only shows alerts for user's company.
+
+    Permission logic:
+    - alerts:view: Access to all alert types
+    - inventory:view: Access to stock-related alerts (low_stock, out_of_stock)
+    - SuperAdmin: Access to platform alerts
     """
-    permission_classes = [IsAuthenticated, HasPermission]
-    required_permission = 'alerts:view'
+    permission_classes = [IsAuthenticated]
     serializer_class = AlertSerializer
     queryset = Alert.objects.all()
+
+    # Stock-related alert types that inventory users can see
+    STOCK_ALERT_TYPES = ['low_stock', 'out_of_stock']
+
+    def check_permissions(self, request):
+        """
+        Override to allow access based on alert type permissions.
+        Users with inventory:view can access stock alerts.
+        Users with alerts:view can access all alerts.
+        """
+        super().check_permissions(request)
+
+        user = request.user
+
+        # SuperAdmins can access everything
+        if user.is_superuser:
+            return
+
+        # Check if user has alerts:view (full access)
+        if user.has_permission('alerts:view'):
+            return
+
+        # Check if user has inventory:view (stock alerts only)
+        if user.has_permission('inventory:view'):
+            # Will be filtered in get_queryset to only show stock alerts
+            return
+
+        # No permission - raise 403
+        from rest_framework.exceptions import PermissionDenied
+        raise PermissionDenied("No tiene permiso para ver alertas.")
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -44,6 +78,15 @@ class AlertViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if hasattr(user, 'company_id') and user.company_id:
             queryset = queryset.filter(company_id=user.company_id)
+
+        # Permission-based filtering:
+        # Users with only inventory:view see only stock alerts
+        if not user.is_superuser and not user.has_permission('alerts:view'):
+            if user.has_permission('inventory:view'):
+                queryset = queryset.filter(alert_type__in=self.STOCK_ALERT_TYPES)
+            else:
+                # No alerts permission at all - empty queryset
+                queryset = queryset.none()
 
         return queryset.select_related(
             'branch', 'product', 'employee', 'read_by', 'resolved_by'

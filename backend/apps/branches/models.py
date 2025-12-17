@@ -24,9 +24,8 @@ class Branch(AuditMixin, SoftDeleteMixin):
     name = models.CharField(max_length=100, verbose_name='Nombre')
     code = models.CharField(
         max_length=20,
-        unique=True,
         verbose_name='Código',
-        help_text='Código único de la sucursal (ej: SUC001)'
+        help_text='Código único de la sucursal por empresa (ej: SUC001)'
     )
     address = models.TextField(blank=True, verbose_name='Dirección')
     city = models.CharField(max_length=100, blank=True, verbose_name='Ciudad')
@@ -134,6 +133,12 @@ class Branch(AuditMixin, SoftDeleteMixin):
         verbose_name = 'Sucursal'
         verbose_name_plural = 'Sucursales'
         ordering = ['name']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['company', 'code'],
+                name='unique_branch_code_per_company'
+            )
+        ]
 
     def __str__(self):
         return f"{self.code} - {self.name}"
@@ -164,7 +169,10 @@ class Branch(AuditMixin, SoftDeleteMixin):
         return None
 
     def save(self, *args, **kwargs):
-        # Ensure only one main branch
-        if self.is_main:
-            Branch.objects.filter(is_main=True).exclude(pk=self.pk).update(is_main=False)
+        # Ensure only one main branch per company (multi-tenant safe)
+        if self.is_main and self.company_id:
+            Branch.objects.filter(
+                company_id=self.company_id,
+                is_main=True
+            ).exclude(pk=self.pk).update(is_main=False)
         super().save(*args, **kwargs)

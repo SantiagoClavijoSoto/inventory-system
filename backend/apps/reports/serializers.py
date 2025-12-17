@@ -160,7 +160,7 @@ class StockSummaryResponseSerializer(serializers.Serializer):
     """Response serializer for stock summary."""
     total_products = serializers.IntegerField()
     total_units = serializers.IntegerField()
-    total_cost_value = serializers.DecimalField(max_digits=14, decimal_places=2)
+    total_stock_value = serializers.DecimalField(max_digits=14, decimal_places=2)
     total_retail_value = serializers.DecimalField(max_digits=14, decimal_places=2)
     potential_profit = serializers.DecimalField(max_digits=14, decimal_places=2)
     low_stock_count = serializers.IntegerField()

@@ -1,6 +1,9 @@
 """
 Report generation services.
 Aggregates data from various models to generate business insights.
+
+IMPORTANT: All methods require company_id for multi-tenant filtering.
+This ensures data isolation between companies.
 """
 from datetime import date, timedelta
 from decimal import Decimal
@@ -21,14 +24,18 @@ class DashboardService:
     """
 
     @staticmethod
-    def get_today_summary(branch_id: Optional[int] = None) -> dict:
+    def get_today_summary(
+        company_id: int,
+        branch_id: Optional[int] = None
+    ) -> dict:
         """
         Get today's sales summary.
         """
         today = timezone.now().date()
         queryset = Sale.objects.filter(
             created_at__date=today,
-            status='completed'
+            status='completed',
+            branch__company_id=company_id
         )
 
         if branch_id:
@@ -48,13 +55,14 @@ class DashboardService:
             'date': today.isoformat(),
             'total_sales': totals['total_sales'] or Decimal('0.00'),
             'total_transactions': totals['total_transactions'] or 0,
-            'total_items': totals['total_items'] or 0,
-            'avg_ticket': totals['avg_ticket'] or Decimal('0.00'),
+            'items_sold': totals['total_items'] or 0,
+            'average_ticket': totals['avg_ticket'] or Decimal('0.00'),
             'currency': 'MXN'
         }
 
     @staticmethod
     def get_period_comparison(
+        company_id: int,
         branch_id: Optional[int] = None,
         days: int = 7
     ) -> dict:
@@ -66,7 +74,10 @@ class DashboardService:
         previous_start = current_start - timedelta(days=days)
         previous_end = current_start - timedelta(days=1)
 
-        base_query = Sale.objects.filter(status='completed')
+        base_query = Sale.objects.filter(
+            status='completed',
+            branch__company_id=company_id
+        )
         if branch_id:
             base_query = base_query.filter(branch_id=branch_id)
 
@@ -74,52 +85,82 @@ class DashboardService:
             created_at__date__gte=current_start,
             created_at__date__lte=today
         ).aggregate(
-            total=Sum('total'),
-            count=Count('id')
+            total_sum=Sum('total'),
+            count=Count('id'),
+            avg_ticket=Avg('total')
         )
 
         previous_data = base_query.filter(
             created_at__date__gte=previous_start,
             created_at__date__lte=previous_end
         ).aggregate(
-            total=Sum('total'),
-            count=Count('id')
+            total_sum=Sum('total'),
+            count=Count('id'),
+            avg_ticket=Avg('total')
         )
 
-        current_total = current_data['total'] or Decimal('0')
-        previous_total = previous_data['total'] or Decimal('0')
+        current_total = current_data['total_sum'] or Decimal('0')
+        previous_total = previous_data['total_sum'] or Decimal('0')
+        current_count = current_data['count'] or 0
+        previous_count = previous_data['count'] or 0
+        current_ticket = current_data['avg_ticket'] or Decimal('0')
+        previous_ticket = previous_data['avg_ticket'] or Decimal('0')
 
+        # Calculate sales change
         if previous_total > 0:
-            change_percent = ((current_total - previous_total) / previous_total) * 100
+            sales_change = ((current_total - previous_total) / previous_total) * 100
         else:
-            change_percent = Decimal('100') if current_total > 0 else Decimal('0')
+            sales_change = Decimal('100') if current_total > 0 else Decimal('0')
+
+        # Calculate transactions change
+        if previous_count > 0:
+            transactions_change = ((current_count - previous_count) / previous_count) * 100
+        else:
+            transactions_change = Decimal('100') if current_count > 0 else Decimal('0')
+
+        # Calculate ticket change
+        if previous_ticket > 0:
+            ticket_change = ((current_ticket - previous_ticket) / previous_ticket) * 100
+        else:
+            ticket_change = Decimal('100') if current_ticket > 0 else Decimal('0')
 
         return {
             'current_period': {
                 'start': current_start.isoformat(),
                 'end': today.isoformat(),
                 'total': current_total,
-                'transactions': current_data['count'] or 0
+                'transactions': current_count,
+                'average_ticket': current_ticket
             },
             'previous_period': {
                 'start': previous_start.isoformat(),
                 'end': previous_end.isoformat(),
                 'total': previous_total,
-                'transactions': previous_data['count'] or 0
+                'transactions': previous_count,
+                'average_ticket': previous_ticket
             },
-            'change_percent': round(change_percent, 2),
-            'trend': 'up' if change_percent > 0 else ('down' if change_percent < 0 else 'stable')
+            'changes': {
+                'sales_change': round(float(sales_change), 2),
+                'transactions_change': round(float(transactions_change), 2),
+                'ticket_change': round(float(ticket_change), 2)
+            },
+            'change_percent': round(float(sales_change), 2),
+            'trend': 'up' if sales_change > 0 else ('down' if sales_change < 0 else 'stable')
         }
 
     @staticmethod
-    def get_low_stock_count(branch_id: Optional[int] = None) -> dict:
+    def get_low_stock_count(
+        company_id: int,
+        branch_id: Optional[int] = None
+    ) -> dict:
         """
         Get count of products with low stock.
         """
         queryset = BranchStock.objects.filter(
             quantity__lte=F('product__min_stock'),
             product__is_active=True,
-            product__is_deleted=False
+            product__is_deleted=False,
+            branch__company_id=company_id
         )
 
         if branch_id:
@@ -136,6 +177,7 @@ class DashboardService:
 
     @staticmethod
     def get_top_products(
+        company_id: int,
         branch_id: Optional[int] = None,
         days: int = 30,
         limit: int = 10
@@ -147,7 +189,8 @@ class DashboardService:
 
         queryset = SaleItem.objects.filter(
             sale__status='completed',
-            sale__created_at__date__gte=start_date
+            sale__created_at__date__gte=start_date,
+            sale__branch__company_id=company_id
         )
 
         if branch_id:
@@ -175,6 +218,7 @@ class SalesReportService:
 
     @staticmethod
     def get_sales_by_period(
+        company_id: int,
         date_from: date,
         date_to: date,
         branch_id: Optional[int] = None,
@@ -186,7 +230,8 @@ class SalesReportService:
         queryset = Sale.objects.filter(
             created_at__date__gte=date_from,
             created_at__date__lte=date_to,
-            status='completed'
+            status='completed',
+            branch__company_id=company_id
         )
 
         if branch_id:
@@ -226,6 +271,7 @@ class SalesReportService:
 
     @staticmethod
     def get_sales_by_payment_method(
+        company_id: int,
         date_from: date,
         date_to: date,
         branch_id: Optional[int] = None
@@ -236,7 +282,8 @@ class SalesReportService:
         queryset = Sale.objects.filter(
             created_at__date__gte=date_from,
             created_at__date__lte=date_to,
-            status='completed'
+            status='completed',
+            branch__company_id=company_id
         )
 
         if branch_id:
@@ -248,6 +295,9 @@ class SalesReportService:
             avg_ticket=Avg('total')
         ).order_by('-total_sales')
 
+        # Calculate grand total for percentage
+        grand_total = queryset.aggregate(total=Sum('total'))['total'] or Decimal('1')
+
         # Add payment method display names
         payment_labels = dict(Sale.PAYMENT_METHOD_CHOICES)
 
@@ -255,15 +305,18 @@ class SalesReportService:
             {
                 'payment_method': r['payment_method'],
                 'payment_method_display': payment_labels.get(r['payment_method'], r['payment_method']),
+                'total_amount': r['total_sales'] or Decimal('0.00'),
                 'total_sales': r['total_sales'] or Decimal('0.00'),
                 'transaction_count': r['transaction_count'] or 0,
-                'avg_ticket': r['avg_ticket'] or Decimal('0.00')
+                'avg_ticket': r['avg_ticket'] or Decimal('0.00'),
+                'percentage': round(float((r['total_sales'] or Decimal('0')) / grand_total * 100), 2)
             }
             for r in results
         ]
 
     @staticmethod
     def get_sales_by_cashier(
+        company_id: int,
         date_from: date,
         date_to: date,
         branch_id: Optional[int] = None
@@ -274,7 +327,8 @@ class SalesReportService:
         queryset = Sale.objects.filter(
             created_at__date__gte=date_from,
             created_at__date__lte=date_to,
-            status='completed'
+            status='completed',
+            branch__company_id=company_id
         )
 
         if branch_id:
@@ -309,6 +363,7 @@ class SalesReportService:
 
     @staticmethod
     def get_sales_by_category(
+        company_id: int,
         date_from: date,
         date_to: date,
         branch_id: Optional[int] = None
@@ -319,7 +374,8 @@ class SalesReportService:
         queryset = SaleItem.objects.filter(
             sale__created_at__date__gte=date_from,
             sale__created_at__date__lte=date_to,
-            sale__status='completed'
+            sale__status='completed',
+            sale__branch__company_id=company_id
         )
 
         if branch_id:
@@ -337,6 +393,9 @@ class SalesReportService:
             unique_products=Count('product_id', distinct=True)
         ).order_by('-total_revenue')
 
+        # Calculate grand total for percentage
+        grand_total = queryset.aggregate(total=Sum('subtotal'))['total'] or Decimal('1')
+
         return [
             {
                 'category_id': r['product__category_id'],
@@ -344,13 +403,15 @@ class SalesReportService:
                 'total_quantity': r['total_quantity'] or 0,
                 'total_revenue': r['total_revenue'] or Decimal('0.00'),
                 'total_profit': r['total_profit'] or Decimal('0.00'),
-                'unique_products': r['unique_products'] or 0
+                'unique_products': r['unique_products'] or 0,
+                'percentage': round(float((r['total_revenue'] or Decimal('0')) / grand_total * 100), 2)
             }
             for r in results
         ]
 
     @staticmethod
     def get_hourly_sales(
+        company_id: int,
         target_date: date,
         branch_id: Optional[int] = None
     ) -> list:
@@ -361,7 +422,8 @@ class SalesReportService:
 
         queryset = Sale.objects.filter(
             created_at__date=target_date,
-            status='completed'
+            status='completed',
+            branch__company_id=company_id
         )
 
         if branch_id:
@@ -395,6 +457,51 @@ class SalesReportService:
 
         return complete_hours
 
+    @staticmethod
+    def get_top_products(
+        company_id: int,
+        date_from: date,
+        date_to: date,
+        branch_id: Optional[int] = None,
+        limit: int = 10
+    ) -> list:
+        """
+        Get top selling products by quantity within a date range.
+        """
+        queryset = SaleItem.objects.filter(
+            sale__status='completed',
+            sale__created_at__date__gte=date_from,
+            sale__created_at__date__lte=date_to,
+            sale__branch__company_id=company_id
+        )
+
+        if branch_id:
+            queryset = queryset.filter(sale__branch_id=branch_id)
+
+        top_products = queryset.values(
+            'product_id',
+            'product_name',
+            'product_sku'
+        ).annotate(
+            total_quantity=Sum('quantity'),
+            total_revenue=Sum('subtotal'),
+            total_profit=Sum(
+                (F('unit_price') - F('cost_price')) * F('quantity')
+            )
+        ).order_by('-total_quantity')[:limit]
+
+        return [
+            {
+                'product_id': p['product_id'],
+                'product_name': p['product_name'],
+                'product_sku': p['product_sku'],
+                'total_quantity': p['total_quantity'] or 0,
+                'total_revenue': p['total_revenue'] or Decimal('0.00'),
+                'total_profit': p['total_profit'] or Decimal('0.00')
+            }
+            for p in top_products
+        ]
+
 
 class InventoryReportService:
     """
@@ -402,13 +509,17 @@ class InventoryReportService:
     """
 
     @staticmethod
-    def get_stock_summary(branch_id: Optional[int] = None) -> dict:
+    def get_stock_summary(
+        company_id: int,
+        branch_id: Optional[int] = None
+    ) -> dict:
         """
         Get overall stock summary statistics.
         """
         queryset = BranchStock.objects.filter(
             product__is_active=True,
-            product__is_deleted=False
+            product__is_deleted=False,
+            branch__company_id=company_id
         )
 
         if branch_id:
@@ -431,7 +542,7 @@ class InventoryReportService:
         return {
             'total_products': totals['total_products'] or 0,
             'total_units': totals['total_units'] or 0,
-            'total_cost_value': totals['total_value'] or Decimal('0.00'),
+            'total_stock_value': totals['total_value'] or Decimal('0.00'),
             'total_retail_value': totals['total_retail_value'] or Decimal('0.00'),
             'potential_profit': (totals['total_retail_value'] or Decimal('0')) - (totals['total_value'] or Decimal('0')),
             'low_stock_count': low_stock,
@@ -439,13 +550,17 @@ class InventoryReportService:
         }
 
     @staticmethod
-    def get_stock_by_category(branch_id: Optional[int] = None) -> list:
+    def get_stock_by_category(
+        company_id: int,
+        branch_id: Optional[int] = None
+    ) -> list:
         """
         Get stock breakdown by category.
         """
         queryset = BranchStock.objects.filter(
             product__is_active=True,
-            product__is_deleted=False
+            product__is_deleted=False,
+            branch__company_id=company_id
         )
 
         if branch_id:
@@ -469,8 +584,8 @@ class InventoryReportService:
                 'category_id': r['product__category_id'],
                 'category_name': r['product__category__name'],
                 'product_count': r['product_count'] or 0,
-                'total_units': r['total_units'] or 0,
-                'total_value': r['total_value'] or Decimal('0.00'),
+                'total_quantity': r['total_units'] or 0,
+                'stock_value': r['total_value'] or Decimal('0.00'),
                 'low_stock_count': r['low_stock_count'] or 0
             }
             for r in results
@@ -478,6 +593,7 @@ class InventoryReportService:
 
     @staticmethod
     def get_low_stock_products(
+        company_id: int,
         branch_id: Optional[int] = None,
         limit: int = 50
     ) -> list:
@@ -487,7 +603,8 @@ class InventoryReportService:
         queryset = BranchStock.objects.filter(
             quantity__lte=F('product__min_stock'),
             product__is_active=True,
-            product__is_deleted=False
+            product__is_deleted=False,
+            branch__company_id=company_id
         ).select_related('product', 'product__category', 'branch')
 
         if branch_id:
@@ -513,42 +630,114 @@ class InventoryReportService:
 
     @staticmethod
     def get_stock_movements_summary(
+        company_id: int,
         date_from: date,
         date_to: date,
         branch_id: Optional[int] = None
     ) -> list:
         """
-        Get stock movements summary by type.
+        Get sales summary by date for the inventory section.
+        Shows daily sales with transaction count and total amount.
         """
-        queryset = StockMovement.objects.filter(
+        queryset = Sale.objects.filter(
             created_at__date__gte=date_from,
-            created_at__date__lte=date_to
+            created_at__date__lte=date_to,
+            status='completed',
+            branch__company_id=company_id
         )
 
         if branch_id:
             queryset = queryset.filter(branch_id=branch_id)
 
-        results = queryset.values('movement_type').annotate(
-            movement_count=Count('id'),
-            total_quantity=Sum('quantity'),
-            unique_products=Count('product_id', distinct=True)
-        ).order_by('-movement_count')
-
-        movement_labels = dict(StockMovement.MOVEMENT_TYPES)
+        results = queryset.annotate(
+            sale_date=TruncDate('created_at')
+        ).values('sale_date').annotate(
+            transaction_count=Count('id'),
+            total_amount=Sum('total'),
+            items_sold=Sum('items__quantity')
+        ).order_by('-sale_date')[:10]  # Last 10 days with sales
 
         return [
             {
-                'movement_type': r['movement_type'],
-                'movement_type_display': movement_labels.get(r['movement_type'], r['movement_type']),
-                'movement_count': r['movement_count'] or 0,
-                'total_quantity': r['total_quantity'] or 0,
-                'unique_products': r['unique_products'] or 0
+                'date': r['sale_date'].strftime('%Y-%m-%d') if r['sale_date'] else None,
+                'date_display': r['sale_date'].strftime('%d/%m/%Y') if r['sale_date'] else None,
+                'transaction_count': r['transaction_count'] or 0,
+                'total_amount': r['total_amount'] or Decimal('0.00'),
+                'items_sold': r['items_sold'] or 0
             }
             for r in results
         ]
 
     @staticmethod
+    def get_sales_by_date(
+        company_id: int,
+        target_date: date,
+        branch_id: Optional[int] = None
+    ) -> list:
+        """
+        Get individual sales for a specific date.
+        """
+        queryset = Sale.objects.filter(
+            created_at__date=target_date,
+            status='completed',
+            branch__company_id=company_id
+        ).select_related('cashier', 'branch').prefetch_related('items')
+
+        if branch_id:
+            queryset = queryset.filter(branch_id=branch_id)
+
+        return [
+            {
+                'id': sale.id,
+                'sale_number': sale.sale_number,
+                'time': sale.created_at.strftime('%H:%M'),
+                'total': sale.total,
+                'items_count': sale.items.count(),
+                'payment_method': sale.get_payment_method_display(),
+                'cashier_name': sale.cashier.get_full_name() if sale.cashier else 'N/A',
+            }
+            for sale in queryset.order_by('-created_at')
+        ]
+
+    @staticmethod
+    def get_all_sales(
+        company_id: int,
+        date_from: date,
+        date_to: date,
+        branch_id: Optional[int] = None
+    ) -> list:
+        """
+        Get all sales within a date range (for month filtering).
+        """
+        queryset = Sale.objects.filter(
+            created_at__date__gte=date_from,
+            created_at__date__lte=date_to,
+            status='completed',
+            branch__company_id=company_id
+        ).select_related('cashier', 'branch').prefetch_related('items')
+
+        if branch_id:
+            queryset = queryset.filter(branch_id=branch_id)
+
+        return [
+            {
+                'id': sale.id,
+                'sale_number': sale.sale_number,
+                'date': sale.created_at.strftime('%Y-%m-%d'),
+                'date_display': sale.created_at.strftime('%d/%m/%Y'),
+                'time': sale.created_at.strftime('%H:%M'),
+                'total': sale.total,
+                'items_count': sale.items.count(),
+                'payment_method': sale.get_payment_method_display(),
+                'cashier_name': sale.cashier.get_full_name() if sale.cashier else 'N/A',
+                'branch_name': sale.branch.name if sale.branch else 'N/A',
+            }
+            for sale in queryset.order_by('-created_at')
+        ]
+
+    @staticmethod
     def get_product_movement_history(
+        company_id: int,
         product_id: int,
         branch_id: Optional[int] = None,
         days: int = 30
@@ -560,7 +749,8 @@ class InventoryReportService:
 
         queryset = StockMovement.objects.filter(
             product_id=product_id,
-            created_at__date__gte=start_date
+            created_at__date__gte=start_date,
+            branch__company_id=company_id
         ).select_related('branch', 'created_by')
 
         if branch_id:
@@ -595,6 +785,7 @@ class EmployeeReportService:
 
     @staticmethod
     def get_employee_performance(
+        company_id: int,
         date_from: date,
         date_to: date,
         branch_id: Optional[int] = None
@@ -604,7 +795,8 @@ class EmployeeReportService:
         """
         queryset = Employee.objects.filter(
             status='active',
-            is_deleted=False
+            is_deleted=False,
+            branch__company_id=company_id
         ).select_related('user', 'branch')
 
         if branch_id:
@@ -661,6 +853,7 @@ class EmployeeReportService:
 
     @staticmethod
     def get_shift_summary(
+        company_id: int,
         date_from: date,
         date_to: date,
         branch_id: Optional[int] = None
@@ -671,7 +864,8 @@ class EmployeeReportService:
         queryset = Shift.objects.filter(
             clock_in__date__gte=date_from,
             clock_in__date__lte=date_to,
-            clock_out__isnull=False
+            clock_out__isnull=False,
+            branch__company_id=company_id
         )
 
         if branch_id:
@@ -718,6 +912,7 @@ class BranchReportService:
 
     @staticmethod
     def get_branch_comparison(
+        company_id: int,
         date_from: date,
         date_to: date
     ) -> list:
@@ -726,7 +921,8 @@ class BranchReportService:
         """
         branches = Branch.objects.filter(
             is_active=True,
-            is_deleted=False
+            is_deleted=False,
+            company_id=company_id
         )
 
         results = []

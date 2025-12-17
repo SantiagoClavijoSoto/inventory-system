@@ -54,6 +54,7 @@ class UserSerializer(serializers.ModelSerializer):
         source='role',
         required=False
     )
+    role_name = serializers.SerializerMethodField()
     permissions = serializers.SerializerMethodField()
     full_name = serializers.CharField(read_only=True)
     is_platform_admin = serializers.SerializerMethodField()
@@ -61,14 +62,19 @@ class UserSerializer(serializers.ModelSerializer):
     company_id = serializers.IntegerField(source='company.id', read_only=True, allow_null=True)
     company_name = serializers.CharField(source='company.name', read_only=True, allow_null=True)
     is_company_admin = serializers.BooleanField(read_only=True)
+    # Branch info
+    default_branch_name = serializers.SerializerMethodField()
+
+    # Permission flags
+    can_create_roles = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = User
         fields = [
             'id', 'email', 'first_name', 'last_name', 'full_name',
-            'phone', 'avatar', 'role', 'role_id', 'permissions',
-            'default_branch', 'allowed_branches', 'is_active',
-            'is_platform_admin', 'is_company_admin',
+            'phone', 'avatar', 'role', 'role_id', 'role_name', 'permissions',
+            'default_branch', 'default_branch_name', 'allowed_branches', 'is_active',
+            'is_platform_admin', 'is_company_admin', 'can_create_roles',
             'company_id', 'company_name',
             'created_at', 'updated_at', 'last_login'
         ]
@@ -76,6 +82,12 @@ class UserSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'allowed_branches': {'required': False}
         }
+
+    def get_role_name(self, obj):
+        return obj.role.name if obj.role else None
+
+    def get_default_branch_name(self, obj):
+        return obj.default_branch.name if obj.default_branch else None
 
     def get_permissions(self, obj):
         return obj.get_permissions()
