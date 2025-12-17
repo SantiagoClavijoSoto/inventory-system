@@ -67,7 +67,7 @@ export interface TopProduct {
   product_id: number
   product_name: string
   product_sku: string
-  quantity_sold: number
+  total_quantity: number
   total_revenue: number
   total_profit: number
 }
@@ -150,10 +150,34 @@ export interface LowStockProduct {
 }
 
 export interface MovementsSummary {
-  movement_type: string
-  movement_type_display: string
-  total_quantity: number
-  movement_count: number
+  date: string
+  date_display: string
+  transaction_count: number
+  total_amount: number
+  items_sold: number
+}
+
+export interface SaleDetail {
+  id: number
+  sale_number: string
+  time: string
+  total: number
+  items_count: number
+  payment_method: string
+  cashier_name: string
+}
+
+export interface SaleListItem {
+  id: number
+  sale_number: string
+  date: string
+  date_display: string
+  time: string
+  total: number
+  items_count: number
+  payment_method: string
+  cashier_name: string
+  branch_name: string
 }
 
 export interface ProductMovement {
@@ -261,6 +285,11 @@ export const salesReportsApi = {
     const response = await apiClient.get('/reports/sales/hourly/', { params })
     return response.data
   },
+
+  getTopProducts: async (params: DateRangeParams & { limit?: number }): Promise<TopProduct[]> => {
+    const response = await apiClient.get('/reports/sales/top-products/', { params })
+    return response.data
+  },
 }
 
 // Inventory Reports API
@@ -291,6 +320,16 @@ export const inventoryReportsApi = {
 
   getProductHistory: async (params: ProductMovementParams): Promise<ProductMovement[]> => {
     const response = await apiClient.get('/reports/inventory/product-history/', { params })
+    return response.data
+  },
+
+  getSalesByDate: async (params: { target_date: string; branch_id?: number }): Promise<SaleDetail[]> => {
+    const response = await apiClient.get('/reports/inventory/sales-by-date/', { params })
+    return response.data
+  },
+
+  getAllSales: async (params: DateRangeParams): Promise<SaleListItem[]> => {
+    const response = await apiClient.get('/reports/inventory/all-sales/', { params })
     return response.data
   },
 }

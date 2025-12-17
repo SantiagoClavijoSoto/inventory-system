@@ -5,6 +5,24 @@ import { useAuthStore, useIsPlatformAdmin } from '@/store/authStore'
 import { alertsApi, type Alert, PLATFORM_ALERT_TYPES } from '@/api/alerts'
 import { subscriptionsApi, type PlatformUsageStats } from '@/api/subscriptions'
 import {
+  dashboardApi,
+  salesReportsApi,
+  inventoryReportsApi,
+  type TodaySummary,
+  type TopProduct,
+  type SalesByPeriod,
+  type StockSummary,
+} from '@/api/reports'
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts'
+import {
   DollarSign,
   Package,
   ShoppingCart,
@@ -27,39 +45,8 @@ import {
   UserX,
   AlertOctagon,
   ArrowUp,
+  Trophy,
 } from 'lucide-react'
-
-// Placeholder data for company admins - will be fetched from API
-const companyStats = [
-  {
-    name: 'Ventas del Día',
-    value: '$12,450',
-    change: '+12%',
-    changeType: 'positive' as const,
-    icon: DollarSign,
-  },
-  {
-    name: 'Productos Vendidos',
-    value: '156',
-    change: '+8%',
-    changeType: 'positive' as const,
-    icon: ShoppingCart,
-  },
-  {
-    name: 'Productos en Stock',
-    value: '2,340',
-    change: '-2%',
-    changeType: 'negative' as const,
-    icon: Package,
-  },
-  {
-    name: 'Ganancias del Mes',
-    value: '$45,230',
-    change: '+18%',
-    changeType: 'positive' as const,
-    icon: TrendingUp,
-  },
-]
 
 // Alert type configuration for company alerts
 const companyAlertConfig = {
@@ -180,6 +167,21 @@ export function Dashboard() {
   const { user, currentBranch } = useAuthStore()
   const isPlatformAdmin = useIsPlatformAdmin()
 
+  // Permission helpers
+  const userPermissions = user?.permissions || []
+  const hasPermission = (perm: string) => userPermissions.includes(perm)
+
+  // Check specific permissions for dashboard sections
+  const hasInventoryView = hasPermission('inventory:view')
+  const hasSalesView = hasPermission('sales:view')
+  const hasReportsView = hasPermission('reports:view')
+  const hasAlertsView = hasPermission('alerts:view')
+
+  // Derived permissions for different dashboard sections
+  const canViewStockAlerts = hasInventoryView || hasAlertsView
+  const canViewSalesData = hasSalesView || hasReportsView
+  const canViewInventoryData = hasInventoryView || hasReportsView
+
   // Fetch subscription stats (SuperAdmin only)
   const { data: subscriptionStats, isLoading: isLoadingStats } = useQuery({
     queryKey: ['subscriptions', 'stats'],
@@ -218,7 +220,7 @@ export function Dashboard() {
     refetchInterval: 60000,
   })
 
-  // Fetch stock alerts for company admins
+  // Fetch stock alerts for users with inventory or alerts view permission
   const { data: stockAlerts, isLoading: isLoadingAlerts } = useQuery<Alert[]>({
     queryKey: ['alerts', 'stock', currentBranch?.id],
     queryFn: async () => {
@@ -227,13 +229,11 @@ export function Dashboard() {
           branch_id: currentBranch?.id,
           alert_type: 'low_stock',
           status: 'active',
-          limit: 10,
         }),
         alertsApi.getAll({
           branch_id: currentBranch?.id,
           alert_type: 'out_of_stock',
           status: 'active',
-          limit: 10,
         }),
       ])
       const combined = [...outOfStock, ...lowStock]
@@ -244,7 +244,49 @@ export function Dashboard() {
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       })
     },
-    enabled: !isPlatformAdmin && !!currentBranch,
+    enabled: !isPlatformAdmin && !!currentBranch && canViewStockAlerts,
+    refetchInterval: 60000,
+  })
+
+  // Fetch today's sales summary (requires sales or reports view permission)
+  const { data: todaySummary, isLoading: isLoadingTodaySummary } = useQuery<TodaySummary>({
+    queryKey: ['dashboard', 'today', currentBranch?.id],
+    queryFn: () => dashboardApi.getTodaySummary(currentBranch?.id),
+    enabled: !isPlatformAdmin && !!currentBranch && canViewSalesData,
+    refetchInterval: 60000,
+  })
+
+  // Fetch inventory summary (requires inventory or reports view permission)
+  const { data: inventorySummary, isLoading: isLoadingInventory } = useQuery<StockSummary>({
+    queryKey: ['inventory', 'summary', currentBranch?.id],
+    queryFn: () => inventoryReportsApi.getSummary(currentBranch?.id),
+    enabled: !isPlatformAdmin && !!currentBranch && canViewInventoryData,
+    refetchInterval: 60000,
+  })
+
+  // Fetch sales by period - last 7 days (requires sales or reports view permission)
+  const { data: salesByPeriod, isLoading: isLoadingSalesPeriod } = useQuery<SalesByPeriod[]>({
+    queryKey: ['sales', 'by-period', currentBranch?.id],
+    queryFn: () => {
+      const today = new Date()
+      const sevenDaysAgo = new Date(today)
+      sevenDaysAgo.setDate(today.getDate() - 6)
+      return salesReportsApi.getByPeriod({
+        date_from: sevenDaysAgo.toISOString().split('T')[0],
+        date_to: today.toISOString().split('T')[0],
+        group_by: 'day',
+        branch_id: currentBranch?.id,
+      })
+    },
+    enabled: !isPlatformAdmin && !!currentBranch && canViewSalesData,
+    refetchInterval: 60000,
+  })
+
+  // Fetch top 5 products (requires sales or reports view permission)
+  const { data: topProducts, isLoading: isLoadingTopProducts } = useQuery<TopProduct[]>({
+    queryKey: ['dashboard', 'top-products', currentBranch?.id],
+    queryFn: () => dashboardApi.getTopProducts({ days: 7, limit: 5, branch_id: currentBranch?.id }),
+    enabled: !isPlatformAdmin && !!currentBranch && canViewSalesData,
     refetchInterval: 60000,
   })
 
@@ -258,12 +300,11 @@ export function Dashboard() {
 
   // Format currency
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: 'COP',
+    const formatted = new Intl.NumberFormat('es-CO', {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount)
+    return `COP ${formatted}`
   }
 
   // SuperAdmin Dashboard
@@ -705,164 +746,331 @@ export function Dashboard() {
         </p>
       </div>
 
-      {/* Stats Grid */}
+      {/* Stats Grid - shows cards based on user permissions */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {companyStats.map((stat) => (
-          <Card key={stat.name}>
+        {/* Ventas del Día - requires sales/reports permission */}
+        {canViewSalesData && (
+          <Card>
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-secondary-500">
-                    {stat.name}
+                    Ventas del Día
                   </p>
                   <p className="text-2xl font-bold text-secondary-900 mt-1">
-                    {stat.value}
+                    {isLoadingTodaySummary ? (
+                      <Loader2 className="w-6 h-6 animate-spin" />
+                    ) : (
+                      formatCurrency(todaySummary?.total_sales || 0)
+                    )}
                   </p>
-                  <p
-                    className={`text-sm mt-1 ${
-                      stat.changeType === 'positive'
-                        ? 'text-success-600'
-                        : 'text-danger-600'
-                    }`}
-                  >
-                    {stat.change} vs ayer
+                  <p className="text-sm mt-1 text-secondary-500">
+                    {todaySummary?.total_transactions || 0} transacciones
                   </p>
                 </div>
-                <div
-                  className={`p-3 rounded-lg ${
-                    stat.changeType === 'positive'
-                      ? 'bg-success-100'
-                      : 'bg-danger-100'
-                  }`}
-                >
-                  <stat.icon
-                    className={`w-6 h-6 ${
-                      stat.changeType === 'positive'
-                        ? 'text-success-600'
-                        : 'text-danger-600'
-                    }`}
-                  />
+                <div className="p-3 rounded-lg bg-success-100">
+                  <DollarSign className="w-6 h-6 text-success-600" />
                 </div>
               </div>
             </CardContent>
           </Card>
-        ))}
+        )}
+
+        {/* Productos Vendidos - requires sales/reports permission */}
+        {canViewSalesData && (
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-secondary-500">
+                    Productos Vendidos
+                  </p>
+                  <p className="text-2xl font-bold text-secondary-900 mt-1">
+                    {isLoadingTodaySummary ? (
+                      <Loader2 className="w-6 h-6 animate-spin" />
+                    ) : (
+                      todaySummary?.items_sold || 0
+                    )}
+                  </p>
+                  <p className="text-sm mt-1 text-secondary-500">
+                    Ticket promedio: {formatCurrency(todaySummary?.average_ticket || 0)}
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-primary-100">
+                  <ShoppingCart className="w-6 h-6 text-primary-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Productos en Stock - requires inventory/reports permission */}
+        {canViewInventoryData && (
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-secondary-500">
+                    Productos en Stock
+                  </p>
+                  <p className="text-2xl font-bold text-secondary-900 mt-1">
+                    {isLoadingInventory ? (
+                      <Loader2 className="w-6 h-6 animate-spin" />
+                    ) : (
+                      (inventorySummary?.total_products || 0).toLocaleString()
+                    )}
+                  </p>
+                  <p className={`text-sm mt-1 ${
+                    (inventorySummary?.low_stock_count || 0) > 0 ? 'text-warning-600' : 'text-secondary-500'
+                  }`}>
+                    {inventorySummary?.low_stock_count || 0} con stock bajo
+                  </p>
+                </div>
+                <div className={`p-3 rounded-lg ${
+                  (inventorySummary?.out_of_stock_count || 0) > 0 ? 'bg-danger-100' : 'bg-secondary-100'
+                }`}>
+                  <Package className={`w-6 h-6 ${
+                    (inventorySummary?.out_of_stock_count || 0) > 0 ? 'text-danger-600' : 'text-secondary-600'
+                  }`} />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Ganancia del Día - requires sales/reports permission */}
+        {canViewSalesData && (
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-secondary-500">
+                    Ganancia del Día
+                  </p>
+                  <p className="text-2xl font-bold text-secondary-900 mt-1">
+                    {isLoadingTodaySummary ? (
+                      <Loader2 className="w-6 h-6 animate-spin" />
+                    ) : (
+                      formatCurrency(todaySummary?.total_profit || 0)
+                    )}
+                  </p>
+                  <p className="text-sm mt-1 text-secondary-500">
+                    Efectivo: {formatCurrency(todaySummary?.cash_total || 0)}
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-success-100">
+                  <TrendingUp className="w-6 h-6 text-success-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
-      {/* Alerts Section */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-warning-500" />
-              Alertas de Stock
-            </CardTitle>
-            {stockAlerts && stockAlerts.length > 0 && (
-              <button
-                onClick={handleViewAllAlerts}
-                className="text-sm text-primary-600 hover:text-primary-700 font-medium flex items-center gap-1"
-              >
-                Ver todas
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          {isLoadingAlerts ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-8 h-8 animate-spin text-primary-600" />
-            </div>
-          ) : !stockAlerts || stockAlerts.length === 0 ? (
-            <div className="text-center py-8 text-secondary-500">
-              <CheckCircle2 className="w-12 h-12 mx-auto mb-3 text-success-500" />
-              <p className="font-medium text-secondary-700">¡Todo en orden!</p>
-              <p className="text-sm mt-1">
-                No hay alertas de stock en este momento
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {stockAlerts.slice(0, 5).map((alert) => {
-                const config = companyAlertConfig[alert.alert_type as keyof typeof companyAlertConfig] || companyAlertConfig.low_stock
-                const Icon = config.icon
-                return (
-                  <button
-                    key={alert.id}
-                    onClick={() => handleAlertClick(alert)}
-                    className="w-full flex items-center gap-4 p-3 rounded-lg bg-secondary-50 hover:bg-secondary-100 transition-colors text-left"
-                  >
-                    <div className={`p-2 rounded-lg ${config.bg}`}>
-                      <Icon className={`w-5 h-5 ${config.color}`} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium text-secondary-900 truncate">
-                          {alert.product_name || alert.title}
-                        </p>
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${config.bg} ${config.color}`}>
-                          {config.label}
-                        </span>
-                      </div>
-                      <p className="text-sm text-secondary-500 truncate">
-                        {alert.message}
-                      </p>
-                      {alert.product_sku && (
-                        <p className="text-xs text-secondary-400 mt-0.5">
-                          SKU: {alert.product_sku}
-                          {alert.branch_name && ` • ${alert.branch_name}`}
-                        </p>
-                      )}
-                    </div>
-                    <ChevronRight className="w-5 h-5 text-secondary-400 flex-shrink-0" />
-                  </button>
-                )
-              })}
-              {stockAlerts.length > 5 && (
+      {/* Alerts Section - requires inventory or alerts permission */}
+      {canViewStockAlerts && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-warning-500" />
+                Alertas de Stock
+                {stockAlerts && stockAlerts.length > 0 && (
+                  <span className="ml-2 text-sm font-normal text-secondary-500">
+                    ({stockAlerts.length} {stockAlerts.length === 1 ? 'producto' : 'productos'})
+                  </span>
+                )}
+              </CardTitle>
+              {stockAlerts && stockAlerts.length > 0 && (
                 <button
                   onClick={handleViewAllAlerts}
-                  className="w-full text-center py-2 text-sm text-primary-600 hover:text-primary-700 font-medium"
+                  className="text-sm text-primary-600 hover:text-primary-700 font-medium flex items-center gap-1"
                 >
-                  Ver {stockAlerts.length - 5} alertas más
+                  Ver detalles
+                  <ChevronRight className="w-4 h-4" />
                 </button>
               )}
             </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Charts Section - Placeholder */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Ventas de los Últimos 7 Días</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-64 flex items-center justify-center text-secondary-400">
-              <div className="text-center">
-                <TrendingUp className="w-12 h-12 mx-auto mb-3" />
-                <p>Gráfica de ventas</p>
-                <p className="text-sm">Se mostrará con datos reales</p>
+            {isLoadingAlerts ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-8 h-8 animate-spin text-primary-600" />
               </div>
-            </div>
+            ) : !stockAlerts || stockAlerts.length === 0 ? (
+              <div className="text-center py-8 text-secondary-500">
+                <CheckCircle2 className="w-12 h-12 mx-auto mb-3 text-success-500" />
+                <p className="font-medium text-secondary-700">¡Todo en orden!</p>
+                <p className="text-sm mt-1">
+                  No hay alertas de stock en este momento
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                {stockAlerts.map((alert) => {
+                  const config = companyAlertConfig[alert.alert_type as keyof typeof companyAlertConfig] || companyAlertConfig.low_stock
+                  const Icon = config.icon
+                  return (
+                    <button
+                      key={alert.id}
+                      onClick={() => handleAlertClick(alert)}
+                      className="w-full flex items-center gap-3 p-2.5 rounded-lg bg-secondary-50 hover:bg-secondary-100 transition-colors text-left"
+                    >
+                      <div className={`p-1.5 rounded-lg ${config.bg} flex-shrink-0`}>
+                        <Icon className={`w-4 h-4 ${config.color}`} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium text-secondary-900 truncate">
+                            {alert.product_name || alert.title}
+                          </p>
+                          <span className={`text-xs px-1.5 py-0.5 rounded-full ${config.bg} ${config.color} flex-shrink-0`}>
+                            {config.label}
+                          </span>
+                        </div>
+                        {alert.product_sku && (
+                          <p className="text-xs text-secondary-400">
+                            SKU: {alert.product_sku}
+                            {alert.branch_name && ` • ${alert.branch_name}`}
+                          </p>
+                        )}
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-secondary-400 flex-shrink-0" />
+                    </button>
+                  )
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
+      )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Top 5 Productos Más Vendidos</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-64 flex items-center justify-center text-secondary-400">
-              <div className="text-center">
-                <Package className="w-12 h-12 mx-auto mb-3" />
-                <p>Lista de productos top</p>
-                <p className="text-sm">Se mostrará con datos reales</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Charts Section - requires sales/reports permission */}
+      {canViewSalesData && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Sales Chart - Last 7 Days */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="w-5 h-5 text-primary-500" />
+                Ventas de los Últimos 7 Días
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoadingSalesPeriod ? (
+                <div className="h-64 flex items-center justify-center">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary-600" />
+                </div>
+              ) : !salesByPeriod || salesByPeriod.length === 0 ? (
+                <div className="h-64 flex items-center justify-center text-secondary-400">
+                  <div className="text-center">
+                    <TrendingUp className="w-12 h-12 mx-auto mb-3" />
+                    <p className="font-medium text-secondary-700">Sin datos</p>
+                    <p className="text-sm">No hay ventas registradas en este período</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={salesByPeriod.map(item => ({
+                        ...item,
+                        // Format date to show day name
+                        day: new Date(item.period).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric' }),
+                      }))}
+                      margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                      <XAxis
+                        dataKey="day"
+                        tick={{ fill: '#6b7280', fontSize: 12 }}
+                        axisLine={{ stroke: '#e5e7eb' }}
+                      />
+                      <YAxis
+                        tick={{ fill: '#6b7280', fontSize: 12 }}
+                        axisLine={{ stroke: '#e5e7eb' }}
+                        tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+                      />
+                      <Tooltip
+                        formatter={(value: number) => [formatCurrency(value), 'Ventas']}
+                        labelFormatter={(label) => `Día: ${label}`}
+                        contentStyle={{
+                          backgroundColor: '#fff',
+                          border: '1px solid #e5e7eb',
+                          borderRadius: '8px',
+                          boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                        }}
+                      />
+                      <Bar
+                        dataKey="total_sales"
+                        fill="#3b82f6"
+                        radius={[4, 4, 0, 0]}
+                        name="Ventas"
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Top 5 Products */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Trophy className="w-5 h-5 text-warning-500" />
+                Top 5 Productos Más Vendidos
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoadingTopProducts ? (
+                <div className="h-64 flex items-center justify-center">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary-600" />
+                </div>
+              ) : !topProducts || topProducts.length === 0 ? (
+                <div className="h-64 flex items-center justify-center text-secondary-400">
+                  <div className="text-center">
+                    <Package className="w-12 h-12 mx-auto mb-3" />
+                    <p className="font-medium text-secondary-700">Sin datos</p>
+                    <p className="text-sm">No hay productos vendidos en este período</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {topProducts.map((product, index) => (
+                    <div key={product.product_id} className="flex items-center gap-4">
+                      <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                        index === 0 ? 'bg-warning-100 text-warning-700' :
+                        index === 1 ? 'bg-secondary-200 text-secondary-700' :
+                        index === 2 ? 'bg-orange-100 text-orange-700' :
+                        'bg-secondary-100 text-secondary-600'
+                      }`}>
+                        {index + 1}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-secondary-900 truncate">
+                          {product.product_name}
+                        </p>
+                        <p className="text-xs text-secondary-500">
+                          SKU: {product.product_sku}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-semibold text-secondary-900">
+                          {product.total_quantity} uds
+                        </p>
+                        <p className="text-xs text-success-600">
+                          {formatCurrency(product.total_revenue)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }

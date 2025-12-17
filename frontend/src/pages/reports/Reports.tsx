@@ -9,7 +9,7 @@ import {
   type DateRangeParams,
   type SalesPeriodParams,
 } from '@/api/reports'
-// Button imported for future use
+import { useAuthStore } from '@/store/authStore'
 import { Badge } from '@/components/ui/Badge'
 import { formatCurrency } from '@/utils/formatters'
 import {
@@ -67,10 +67,11 @@ const getDateRange = (preset: string): { date_from: string; date_to: string } =>
 }
 
 export function Reports() {
+  const { currentBranch } = useAuthStore()
   const [activeTab, setActiveTab] = useState<ReportTab>('sales')
   const [datePreset, setDatePreset] = useState('month')
-  const [branchId] = useState<number | undefined>(undefined)
 
+  const branchId = currentBranch?.id
   const dateRange = useMemo(() => getDateRange(datePreset), [datePreset])
 
   const tabs = [
@@ -174,8 +175,8 @@ function SalesReport({ dateRange, branchId }: { dateRange: DateRangeParams; bran
   })
 
   const { data: topProducts } = useQuery({
-    queryKey: ['top-products', branchId],
-    queryFn: () => dashboardApi.getTopProducts({ days: 30, limit: 10, branch_id: branchId }),
+    queryKey: ['top-products', dateRange, branchId],
+    queryFn: () => salesReportsApi.getTopProducts({ ...dateRange, limit: 10, branch_id: branchId }),
   })
 
   return (
@@ -300,7 +301,7 @@ function SalesReport({ dateRange, branchId }: { dateRange: DateRangeParams; bran
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-medium text-secondary-900">
-                      {product.quantity_sold} vendidos
+                      {product.total_quantity} vendidos
                     </p>
                     <p className="text-xs text-secondary-500">
                       {formatCurrency(product.total_revenue || 0)}
@@ -348,7 +349,9 @@ function SalesReport({ dateRange, branchId }: { dateRange: DateRangeParams; bran
 }
 
 // Inventory Report Component
-function InventoryReport({ branchId, dateRange }: { branchId?: number; dateRange: DateRangeParams }) {
+function InventoryReport({ branchId }: { branchId?: number; dateRange: DateRangeParams }) {
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0])
+
   const { data: summary } = useQuery({
     queryKey: ['inventory-summary', branchId],
     queryFn: () => inventoryReportsApi.getSummary(branchId),
@@ -359,15 +362,15 @@ function InventoryReport({ branchId, dateRange }: { branchId?: number; dateRange
     queryFn: () => inventoryReportsApi.getByCategory(branchId),
   })
 
-  const { data: lowStock } = useQuery({
-    queryKey: ['low-stock', branchId],
-    queryFn: () => inventoryReportsApi.getLowStock({ branch_id: branchId, limit: 20 }),
+  const { data: salesByDate, isLoading: isLoadingSales } = useQuery({
+    queryKey: ['sales-by-date', selectedDate, branchId],
+    queryFn: () => inventoryReportsApi.getSalesByDate({ target_date: selectedDate, branch_id: branchId }),
+    enabled: !!selectedDate,
   })
 
-  const { data: movementsSummary } = useQuery({
-    queryKey: ['movements-summary', dateRange, branchId],
-    queryFn: () => inventoryReportsApi.getMovementsSummary({ ...dateRange, branch_id: branchId }),
-  })
+  const totalSalesAmount = useMemo(() => {
+    return salesByDate?.reduce((sum, sale) => sum + sale.total, 0) || 0
+  }, [salesByDate])
 
   return (
     <div className="space-y-6">
@@ -403,114 +406,82 @@ function InventoryReport({ branchId, dateRange }: { branchId?: number; dateRange
         />
       </div>
 
-      {/* Stock by Category and Movements */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Stock by Category */}
-        <div className="bg-secondary-50 rounded-lg p-4">
-          <h3 className="text-sm font-medium text-secondary-900 mb-4">Stock por Categoría</h3>
-          {stockByCategory && stockByCategory.length > 0 ? (
-            <div className="space-y-2">
-              {stockByCategory.map((category) => (
-                <div
-                  key={category.category_id}
-                  className="flex items-center justify-between py-2 border-b border-secondary-200 last:border-0"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-secondary-900">
-                      {category.category_name}
-                    </p>
-                    <p className="text-xs text-secondary-500">
-                      {category.product_count} productos
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-secondary-900">
-                      {category.total_quantity} unidades
-                    </p>
-                    <p className="text-xs text-secondary-500">
-                      {formatCurrency(category.stock_value || 0)}
-                    </p>
-                  </div>
+      {/* Stock by Category */}
+      <div className="bg-secondary-50 rounded-lg p-4">
+        <h3 className="text-sm font-medium text-secondary-900 mb-4">Stock por Categoría</h3>
+        {stockByCategory && stockByCategory.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {stockByCategory.map((category) => (
+              <div
+                key={category.category_id}
+                className="bg-white rounded-lg p-3 border border-secondary-200"
+              >
+                <p className="text-sm font-medium text-secondary-900 mb-1">
+                  {category.category_name}
+                </p>
+                <div className="flex justify-between text-xs text-secondary-500">
+                  <span>{category.product_count} productos</span>
+                  <span>{category.total_quantity} unidades</span>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="h-48 flex items-center justify-center text-secondary-500">
-              No hay datos disponibles
-            </div>
-          )}
-        </div>
-
-        {/* Movements Summary */}
-        <div className="bg-secondary-50 rounded-lg p-4">
-          <h3 className="text-sm font-medium text-secondary-900 mb-4">Resumen de Movimientos</h3>
-          {movementsSummary && movementsSummary.length > 0 ? (
-            <div className="space-y-2">
-              {movementsSummary.map((movement) => (
-                <div
-                  key={movement.movement_type}
-                  className="flex items-center justify-between py-2 border-b border-secondary-200 last:border-0"
-                >
-                  <span className="text-sm text-secondary-700">
-                    {movement.movement_type_display}
-                  </span>
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-secondary-900">
-                      {movement.total_quantity} unidades
-                    </p>
-                    <p className="text-xs text-secondary-500">
-                      {movement.movement_count} movimientos
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="h-48 flex items-center justify-center text-secondary-500">
-              No hay datos disponibles
-            </div>
-          )}
-        </div>
+                <p className="text-sm font-medium text-success-600 mt-1">
+                  {formatCurrency(category.stock_value || 0)}
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="h-32 flex items-center justify-center text-secondary-500">
+            No hay datos disponibles
+          </div>
+        )}
       </div>
 
-      {/* Low Stock Alert */}
-      <div className="bg-secondary-50 rounded-lg p-4">
-        <h3 className="text-sm font-medium text-secondary-900 mb-4">
-          <span className="flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-warning-500" />
-            Alertas de Stock Bajo
-          </span>
-        </h3>
-        {lowStock && lowStock.length > 0 ? (
-          <div className="overflow-x-auto">
+      {/* Sales by Date Table */}
+      <div className="bg-white rounded-lg shadow-sm border border-secondary-200 p-4">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-sm font-medium text-secondary-900">Ventas del Día</h3>
+            <p className="text-xs text-secondary-500 mt-1">
+              {salesByDate?.length || 0} ventas · Total: {formatCurrency(totalSalesAmount)}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-secondary-400" />
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="px-3 py-1.5 border border-secondary-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+          </div>
+        </div>
+        {isLoadingSales ? (
+          <div className="h-64 flex items-center justify-center text-secondary-500">
+            Cargando...
+          </div>
+        ) : salesByDate && salesByDate.length > 0 ? (
+          <div className="overflow-x-auto max-h-96 overflow-y-auto">
             <table className="w-full text-sm">
-              <thead>
+              <thead className="sticky top-0 bg-white border-b border-secondary-200">
                 <tr className="text-left text-secondary-500">
-                  <th className="pb-2 font-medium">Producto</th>
-                  <th className="pb-2 font-medium">Sucursal</th>
-                  <th className="pb-2 font-medium text-right">Stock Actual</th>
-                  <th className="pb-2 font-medium text-right">Stock Mínimo</th>
-                  <th className="pb-2 font-medium">Estado</th>
+                  <th className="pb-2 pr-4 font-medium">N° Venta</th>
+                  <th className="pb-2 pr-4 font-medium">Hora</th>
+                  <th className="pb-2 pr-4 font-medium">Cajero</th>
+                  <th className="pb-2 pr-4 font-medium text-center">Items</th>
+                  <th className="pb-2 pr-4 font-medium">Método</th>
+                  <th className="pb-2 font-medium text-right">Total</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-secondary-200">
-                {lowStock.map((item) => (
-                  <tr key={`${item.product_id}-${item.branch_id}`}>
-                    <td className="py-2">
-                      <div>
-                        <p className="font-medium text-secondary-900">{item.product_name}</p>
-                        <p className="text-xs text-secondary-500">{item.product_sku}</p>
-                      </div>
-                    </td>
-                    <td className="py-2 text-secondary-600">{item.branch_name}</td>
-                    <td className="py-2 text-right font-medium text-secondary-900">
-                      {item.current_quantity}
-                    </td>
-                    <td className="py-2 text-right text-secondary-500">{item.min_stock}</td>
-                    <td className="py-2">
-                      <Badge variant={item.is_out_of_stock ? 'danger' : 'warning'}>
-                        {item.is_out_of_stock ? 'Sin stock' : 'Stock bajo'}
-                      </Badge>
+                {salesByDate.map((sale) => (
+                  <tr key={sale.id} className="hover:bg-secondary-50">
+                    <td className="py-2 pr-4 font-medium text-secondary-900">{sale.sale_number}</td>
+                    <td className="py-2 pr-4 text-secondary-600">{sale.time}</td>
+                    <td className="py-2 pr-4 text-secondary-600">{sale.cashier_name}</td>
+                    <td className="py-2 pr-4 text-center text-secondary-600">{sale.items_count}</td>
+                    <td className="py-2 pr-4 text-secondary-600">{sale.payment_method}</td>
+                    <td className="py-2 text-right font-medium text-success-600">
+                      {formatCurrency(sale.total)}
                     </td>
                   </tr>
                 ))}
@@ -518,11 +489,12 @@ function InventoryReport({ branchId, dateRange }: { branchId?: number; dateRange
             </table>
           </div>
         ) : (
-          <div className="h-32 flex items-center justify-center text-secondary-500">
-            No hay alertas de stock bajo
+          <div className="h-64 flex items-center justify-center text-secondary-500">
+            No hay ventas en esta fecha
           </div>
         )}
       </div>
+
     </div>
   )
 }
@@ -849,12 +821,12 @@ function SimpleBarChart({ data }: SimpleBarChartProps) {
   const maxValue = Math.max(...data.map((d) => d.total_sales), 1)
 
   return (
-    <div className="flex items-end gap-1 h-full pt-4">
+    <div className="flex items-end gap-1 h-full pt-4 pb-6">
       {data.slice(-14).map((item, index) => {
         const height = (item.total_sales / maxValue) * 100
         return (
-          <div key={index} className="flex-1 flex flex-col items-center group">
-            <div className="relative w-full flex justify-center mb-1">
+          <div key={index} className="flex-1 flex flex-col items-center group h-full">
+            <div className="relative w-full flex justify-center items-end h-full">
               <div
                 className="w-full max-w-8 bg-primary-500 rounded-t hover:bg-primary-600 transition-colors"
                 style={{ height: `${Math.max(height, 2)}%`, minHeight: '4px' }}
@@ -864,7 +836,7 @@ function SimpleBarChart({ data }: SimpleBarChartProps) {
                 {formatCurrency(item.total_sales)}
               </div>
             </div>
-            <span className="text-[10px] text-secondary-500 truncate w-full text-center">
+            <span className="text-[10px] text-secondary-500 truncate w-full text-center mt-1 flex-shrink-0">
               {item.period.slice(-5)}
             </span>
           </div>

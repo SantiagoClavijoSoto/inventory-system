@@ -59,20 +59,23 @@ import toast from 'react-hot-toast'
 type SettingsTab = 'profile' | 'security' | 'preferences' | 'users' | 'roles'
 
 export function Settings() {
-  const { user } = useAuthStore()
+  const { hasPermission } = useAuthStore()
+  const isPlatformAdmin = useIsPlatformAdmin()
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile')
 
-  const isAdmin = user?.is_platform_admin || user?.role?.role_type === 'admin'
+  // Check permissions for admin-only tabs
+  const canManageUsers = isPlatformAdmin || hasPermission('settings:edit') || hasPermission('users:view')
+  const canManageRoles = isPlatformAdmin || hasPermission('settings:edit')
 
-  const tabs: { id: SettingsTab; label: string; icon: React.ReactNode; adminOnly?: boolean }[] = [
+  const tabs: { id: SettingsTab; label: string; icon: React.ReactNode; requiredPermission?: boolean }[] = [
     { id: 'profile', label: 'Perfil', icon: <UserIcon className="h-4 w-4" /> },
     { id: 'security', label: 'Seguridad', icon: <Lock className="h-4 w-4" /> },
     { id: 'preferences', label: 'Preferencias', icon: <Bell className="h-4 w-4" /> },
-    { id: 'users', label: 'Usuarios', icon: <Users className="h-4 w-4" />, adminOnly: true },
-    { id: 'roles', label: 'Roles', icon: <Shield className="h-4 w-4" />, adminOnly: true },
+    { id: 'users', label: 'Usuarios', icon: <Users className="h-4 w-4" />, requiredPermission: canManageUsers },
+    { id: 'roles', label: 'Roles', icon: <Shield className="h-4 w-4" />, requiredPermission: canManageRoles },
   ]
 
-  const visibleTabs = tabs.filter((tab) => !tab.adminOnly || isAdmin)
+  const visibleTabs = tabs.filter((tab) => tab.requiredPermission === undefined || tab.requiredPermission)
 
   return (
     <div className="space-y-6">
@@ -107,8 +110,8 @@ export function Settings() {
         {activeTab === 'profile' && <ProfileSettings />}
         {activeTab === 'security' && <SecuritySettings />}
         {activeTab === 'preferences' && <PreferencesSettings />}
-        {activeTab === 'users' && isAdmin && <UsersSettings />}
-        {activeTab === 'roles' && isAdmin && <RolesSettings />}
+        {activeTab === 'users' && canManageUsers && <UsersSettings />}
+        {activeTab === 'roles' && canManageRoles && <RolesSettings />}
       </div>
     </div>
   )
@@ -427,6 +430,7 @@ function UsersSettings() {
   const queryClient = useQueryClient()
   const isPlatformAdmin = useIsPlatformAdmin()
   const [search, setSearch] = useState('')
+  const [selectedBranch, setSelectedBranch] = useState<number | undefined>(undefined)
   const [page, setPage] = useState(1)
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [isFormModalOpen, setIsFormModalOpen] = useState(false)
@@ -434,13 +438,13 @@ function UsersSettings() {
   const [isResetPwdModalOpen, setIsResetPwdModalOpen] = useState(false)
 
   const { data: usersData, isLoading } = useQuery({
-    queryKey: ['users', { search, page }],
-    queryFn: () => usersApi.getAll({ search: search || undefined, page, page_size: 20 }),
-  })
-
-  const { data: roles } = useQuery({
-    queryKey: ['roles'],
-    queryFn: rolesApi.getAll,
+    queryKey: ['users', { search, page, default_branch: selectedBranch }],
+    queryFn: () => usersApi.getAll({
+      search: search || undefined,
+      default_branch: selectedBranch,
+      page,
+      page_size: 20
+    }),
   })
 
   const { data: branches } = useQuery({
@@ -471,16 +475,32 @@ function UsersSettings() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <Input
-          placeholder="Buscar usuarios..."
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value)
-            setPage(1)
-          }}
-          className="w-64"
-        />
+      <div className="flex justify-between items-center gap-4">
+        <div className="flex items-center gap-4 flex-1">
+          <Input
+            placeholder="Buscar usuarios..."
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value)
+              setPage(1)
+            }}
+            className="w-64"
+          />
+          {!isPlatformAdmin && branches && branches.length > 0 && (
+            <Select
+              options={[
+                { value: '', label: 'Todas las sucursales' },
+                ...branches.map((b) => ({ value: b.id, label: b.name })),
+              ]}
+              value={selectedBranch?.toString() || ''}
+              onChange={(e) => {
+                setSelectedBranch(e.target.value ? Number(e.target.value) : undefined)
+                setPage(1)
+              }}
+              className="w-48"
+            />
+          )}
+        </div>
         <Button
           onClick={() => {
             setSelectedUser(null)
@@ -610,7 +630,6 @@ function UsersSettings() {
           setSelectedUser(null)
         }}
         user={selectedUser}
-        roles={roles || []}
         branches={branches || []}
       />
 
@@ -661,23 +680,20 @@ function UserFormModal({
   isOpen,
   onClose,
   user,
-  roles,
   branches,
 }: {
   isOpen: boolean
   onClose: () => void
   user: User | null
-  roles: Role[]
   branches: BranchSimple[]
 }) {
   const queryClient = useQueryClient()
-  const [formData, setFormData] = useState<CreateUserRequest & { password_confirm?: string }>({
+  const [formData, setFormData] = useState<Omit<CreateUserRequest, 'role'> & { password_confirm?: string }>({
     email: '',
     password: '',
     password_confirm: '',
     first_name: '',
     last_name: '',
-    role: undefined,
     default_branch: undefined,
     is_active: true,
   })
@@ -691,7 +707,6 @@ function UserFormModal({
           password: '',
           first_name: user.first_name,
           last_name: user.last_name,
-          role: user.role?.id,
           default_branch: user.default_branch || undefined,
           is_active: user.is_active,
         })
@@ -702,7 +717,6 @@ function UserFormModal({
           password_confirm: '',
           first_name: '',
           last_name: '',
-          role: undefined,
           default_branch: undefined,
           is_active: true,
         })
@@ -790,38 +804,23 @@ function UserFormModal({
               />
             </>
           )}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-secondary-700 mb-2">Rol</label>
-              <Select
-                options={[
-                  { value: '', label: 'Sin rol' },
-                  ...roles.map((role) => ({ value: role.id, label: role.name })),
-                ]}
-                value={formData.role || ''}
-                onChange={(e) =>
-                  setFormData({ ...formData, role: e.target.value ? Number(e.target.value) : undefined })
-                }
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-secondary-700 mb-2">
-                Sucursal por defecto
-              </label>
-              <Select
-                options={[
-                  { value: '', label: 'Sin sucursal' },
-                  ...branches.map((branch) => ({ value: branch.id, label: branch.name })),
-                ]}
-                value={formData.default_branch || ''}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    default_branch: e.target.value ? Number(e.target.value) : undefined,
-                  })
-                }
-              />
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-secondary-700 mb-2">
+              Sucursal por defecto
+            </label>
+            <Select
+              options={[
+                { value: '', label: 'Sin sucursal' },
+                ...branches.map((branch) => ({ value: branch.id, label: branch.name })),
+              ]}
+              value={formData.default_branch || ''}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  default_branch: e.target.value ? Number(e.target.value) : undefined,
+                })
+              }
+            />
           </div>
           <label className="flex items-center gap-3">
             <input
@@ -921,10 +920,14 @@ function ResetPasswordModal({
 // Roles Management Component (Admin)
 function RolesSettings() {
   const queryClient = useQueryClient()
+  const { user } = useAuthStore()
   const isPlatformAdmin = useIsPlatformAdmin()
   const [selectedRole, setSelectedRole] = useState<Role | null>(null)
   const [isFormModalOpen, setIsFormModalOpen] = useState(false)
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
+
+  // SuperAdmins can always create roles, company admins depend on can_create_roles flag
+  const canCreateRoles = isPlatformAdmin || user?.can_create_roles === true
 
   const { data: roles, isLoading } = useQuery({
     queryKey: ['roles'],
@@ -969,15 +972,21 @@ function RolesSettings() {
         <h2 className="text-lg font-semibold text-secondary-900">
           {isPlatformAdmin ? 'Roles del Sistema' : 'Roles'}
         </h2>
-        <Button
-          onClick={() => {
-            setSelectedRole(null)
-            setIsFormModalOpen(true)
-          }}
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Nuevo Rol
-        </Button>
+        {canCreateRoles ? (
+          <Button
+            onClick={() => {
+              setSelectedRole(null)
+              setIsFormModalOpen(true)
+            }}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Nuevo Rol
+          </Button>
+        ) : (
+          <span className="text-sm text-secondary-500 italic">
+            Solo puedes editar roles existentes
+          </span>
+        )}
       </div>
 
       {isLoading ? (
@@ -1083,7 +1092,27 @@ function CompanyAdminsSection({
   admins: CompanyAdmin[]
   isLoading: boolean
 }) {
+  const queryClient = useQueryClient()
   const [expandedCompanies, setExpandedCompanies] = useState<Set<number>>(new Set())
+  const [updatingAdmin, setUpdatingAdmin] = useState<number | null>(null)
+
+  const updatePermissionMutation = useMutation({
+    mutationFn: ({ userId, canCreateRoles }: { userId: number; canCreateRoles: boolean }) =>
+      companiesApi.updateAdminPermissions(userId, { can_create_roles: canCreateRoles }),
+    onMutate: ({ userId }) => {
+      setUpdatingAdmin(userId)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['company-admins'] })
+      toast.success('Permiso actualizado')
+    },
+    onError: () => {
+      toast.error('Error al actualizar permiso')
+    },
+    onSettled: () => {
+      setUpdatingAdmin(null)
+    },
+  })
 
   // Group admins by company
   const adminsByCompany = useMemo(() => {
@@ -1181,8 +1210,8 @@ function CompanyAdminsSection({
           <Badge variant="secondary">{admins.length} administradores</Badge>
         </div>
         <p className="text-sm text-secondary-500 mt-1">
-          Los administradores de cada empresa pueden crear roles personalizados para sus usuarios,
-          pero no pueden modificar su propio rol de administrador.
+          Gestiona los permisos de los administradores. El toggle &quot;Crear roles&quot; permite o deniega
+          la creación de nuevos roles (siempre pueden editar los existentes).
         </p>
       </CardHeader>
       <CardContent className="p-0">
@@ -1254,12 +1283,36 @@ function CompanyAdminsSection({
                             {admin.role_name && (
                               <Badge variant="primary">{admin.role_name}</Badge>
                             )}
-                            {admin.can_manage_roles && (
-                              <span className="text-xs text-success-600 flex items-center gap-1">
-                                <Shield className="h-3 w-3" />
-                                Puede crear roles
-                              </span>
-                            )}
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <span className="text-xs text-secondary-600">Crear roles</span>
+                              <div className="relative">
+                                <input
+                                  type="checkbox"
+                                  checked={admin.can_create_roles}
+                                  onChange={(e) => {
+                                    updatePermissionMutation.mutate({
+                                      userId: admin.id,
+                                      canCreateRoles: e.target.checked,
+                                    })
+                                  }}
+                                  disabled={updatingAdmin === admin.id}
+                                  className="sr-only peer"
+                                />
+                                <div className={`w-9 h-5 rounded-full transition-colors ${
+                                  admin.can_create_roles
+                                    ? 'bg-success-500'
+                                    : 'bg-secondary-300'
+                                } ${updatingAdmin === admin.id ? 'opacity-50' : ''}`}>
+                                </div>
+                                <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                                  admin.can_create_roles ? 'translate-x-4' : 'translate-x-0'
+                                }`}>
+                                </div>
+                              </div>
+                              {updatingAdmin === admin.id && (
+                                <Spinner size="sm" />
+                              )}
+                            </label>
                           </div>
                         </div>
                       ))}
@@ -1292,37 +1345,100 @@ function RoleFormModal({
     name: '',
     description: '',
     permissions: [] as number[],
+    selectedUsers: [] as number[],
   })
+
+  // Fetch all users to show in the selection
+  const { data: usersData } = useQuery({
+    queryKey: ['users-for-role', { page_size: 100 }],
+    queryFn: () => usersApi.getAll({ page_size: 100 }),
+    enabled: isOpen,
+  })
+
+  // Filter users: show users without role OR users with this role (when editing)
+  const availableUsers = useMemo(() => {
+    if (!usersData?.results) return []
+    return usersData.results.filter((user) => {
+      // Include users without a role
+      if (!user.role) return true
+      // When editing, include users that already have this role
+      if (role && user.role?.id === role.id) return true
+      return false
+    })
+  }, [usersData, role])
 
   // Reset form when modal opens
   useEffect(() => {
     if (isOpen) {
       if (role) {
+        // Get users that have this role
+        const usersWithThisRole = usersData?.results
+          .filter((u) => u.role?.id === role.id)
+          .map((u) => u.id) || []
+
         setFormData({
           name: role.name,
           description: role.description,
           permissions: role.permissions.map((p) => p.id),
+          selectedUsers: usersWithThisRole,
         })
       } else {
-        setFormData({ name: '', description: '', permissions: [] })
+        setFormData({ name: '', description: '', permissions: [], selectedUsers: [] })
       }
     }
-  }, [isOpen, role])
+  }, [isOpen, role, usersData])
 
   const createMutation = useMutation({
     mutationFn: rolesApi.create,
-    onSuccess: () => {
+    onSuccess: async (newRole) => {
+      // Assign the new role to selected users
+      if (formData.selectedUsers.length > 0) {
+        await Promise.all(
+          formData.selectedUsers.map((userId) =>
+            usersApi.update(userId, { role: newRole.id })
+          )
+        )
+      }
       queryClient.invalidateQueries({ queryKey: ['roles'] })
-      toast.success('Rol creado')
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+      toast.success('Rol creado y asignado')
       onClose()
     },
     onError: () => toast.error('Error al crear rol'),
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<Role> }) => rolesApi.update(id, data),
+    mutationFn: async ({ id, data }: { id: number; data: Partial<Role> }) => {
+      // First update the role
+      const updatedRole = await rolesApi.update(id, data)
+
+      // Then handle user assignments
+      if (usersData?.results) {
+        const currentUsersWithRole = usersData.results
+          .filter((u) => u.role?.id === id)
+          .map((u) => u.id)
+
+        // Users to add this role
+        const usersToAdd = formData.selectedUsers.filter(
+          (userId) => !currentUsersWithRole.includes(userId)
+        )
+        // Users to remove this role
+        const usersToRemove = currentUsersWithRole.filter(
+          (userId) => !formData.selectedUsers.includes(userId)
+        )
+
+        // Update users
+        await Promise.all([
+          ...usersToAdd.map((userId) => usersApi.update(userId, { role: id })),
+          ...usersToRemove.map((userId) => usersApi.update(userId, { role: undefined })),
+        ])
+      }
+
+      return updatedRole
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['roles'] })
+      queryClient.invalidateQueries({ queryKey: ['users'] })
       toast.success('Rol actualizado')
       onClose()
     },
@@ -1331,8 +1447,8 @@ function RoleFormModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    // The API accepts permission IDs, so we cast to any to bypass the type mismatch
-    const payload = { ...formData, permissions: formData.permissions } as unknown as Partial<Role>
+    // Backend expects permission_ids (write_only field), not permissions (read_only)
+    const payload = { name: formData.name, description: formData.description, permission_ids: formData.permissions }
     if (role) {
       updateMutation.mutate({ id: role.id, data: payload })
     } else {
@@ -1349,6 +1465,15 @@ function RoleFormModal({
     }))
   }
 
+  const toggleUser = (userId: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      selectedUsers: prev.selectedUsers.includes(userId)
+        ? prev.selectedUsers.filter((id) => id !== userId)
+        : [...prev.selectedUsers, userId],
+    }))
+  }
+
   // Group permissions by module
   const groupedPermissions = permissions.reduce(
     (acc, perm) => {
@@ -1358,6 +1483,39 @@ function RoleFormModal({
     },
     {} as Record<string, Permission[]>
   )
+
+  // Module name translations and display order (matching sidebar menu)
+  const moduleOrder = [
+    'dashboard',
+    'inventory',
+    'employees',
+    'suppliers',
+    'sales',
+    'reports',
+    'alerts',
+    'branches',
+    'settings',
+  ]
+
+  const moduleNames: Record<string, string> = {
+    dashboard: 'Dashboard',
+    inventory: 'Inventario',
+    sales: 'Ventas',
+    employees: 'Empleados',
+    suppliers: 'Proveedores',
+    reports: 'Reportes',
+    settings: 'Configuración',
+    branches: 'Sucursales',
+    alerts: 'Alertas',
+  }
+
+  // Sort permissions by module order
+  const sortedModules = Object.entries(groupedPermissions).sort(([a], [b]) => {
+    const indexA = moduleOrder.indexOf(a)
+    const indexB = moduleOrder.indexOf(b)
+    // If module not in order list, put at end
+    return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB)
+  })
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={role ? 'Editar Rol' : 'Nuevo Rol'} size="lg">
@@ -1374,13 +1532,51 @@ function RoleFormModal({
             value={formData.description}
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
           />
+
+          {/* User Assignment Section */}
+          <div>
+            <label className="block text-sm font-medium text-secondary-700 mb-3">
+              Asignar a Usuarios
+              <span className="text-secondary-500 font-normal ml-2">
+                ({formData.selectedUsers.length} seleccionados)
+              </span>
+            </label>
+            <div className="max-h-40 overflow-y-auto border rounded-lg p-3 bg-secondary-50">
+              {availableUsers.length === 0 ? (
+                <p className="text-sm text-secondary-500 text-center py-2">
+                  No hay usuarios disponibles para asignar
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  {availableUsers.map((user) => (
+                    <label key={user.id} className="flex items-center gap-2 cursor-pointer hover:bg-white p-1 rounded">
+                      <input
+                        type="checkbox"
+                        checked={formData.selectedUsers.includes(user.id)}
+                        onChange={() => toggleUser(user.id)}
+                        className="rounded border-secondary-300"
+                      />
+                      <span className="text-sm text-secondary-700 truncate">
+                        {user.full_name}
+                      </span>
+                      {user.role && (
+                        <Badge variant="secondary" className="text-xs">Actual</Badge>
+                      )}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Permissions Section */}
           <div>
             <label className="block text-sm font-medium text-secondary-700 mb-3">Permisos</label>
-            <div className="space-y-4 max-h-64 overflow-y-auto border rounded-lg p-4">
-              {Object.entries(groupedPermissions).map(([module, perms]) => (
+            <div className="space-y-4 max-h-80 overflow-y-auto border rounded-lg p-4">
+              {sortedModules.map(([module, perms]) => (
                 <div key={module}>
-                  <h4 className="text-sm font-medium text-secondary-800 capitalize mb-2">
-                    {module}
+                  <h4 className="text-sm font-medium text-secondary-800 mb-2">
+                    {moduleNames[module] || module}
                   </h4>
                   <div className="grid grid-cols-2 gap-2">
                     {perms.map((perm) => (
@@ -1391,7 +1587,7 @@ function RoleFormModal({
                           onChange={() => togglePermission(perm.id)}
                           className="rounded border-secondary-300"
                         />
-                        <span className="text-sm text-secondary-600">{perm.description}</span>
+                        <span className="text-sm text-secondary-600">{perm.name || perm.description}</span>
                       </label>
                     ))}
                   </div>

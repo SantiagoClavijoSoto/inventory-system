@@ -27,7 +27,7 @@ export const useAuthStore = create<AuthState>()(
     (set, get) => ({
       user: null,
       isAuthenticated: false,
-      isLoading: true,
+      isLoading: true, // Start as true to show loading until checkAuth completes
       currentBranch: null,
 
       login: async (email: string, password: string) => {
@@ -69,6 +69,7 @@ export const useAuthStore = create<AuthState>()(
           return
         }
 
+        set({ isLoading: true })
         try {
           const user = await authApi.getMe()
           set({
@@ -93,21 +94,29 @@ export const useAuthStore = create<AuthState>()(
       hasPermission: (permission: string) => {
         const { user } = get()
         if (!user) return false
-        if (user.role?.role_type === 'admin') return true
+        // Platform admins (superusers) have all permissions
+        if (user.is_platform_admin) return true
+        // All other users: check their actual permissions from the backend
         return user.permissions?.includes(permission) ?? false
       },
 
       hasModulePermission: (module: string) => {
         const { user } = get()
         if (!user) return false
-        if (user.role?.role_type === 'admin') return true
+        // Platform admins (superusers) have all permissions
+        if (user.is_platform_admin) return true
+        // Dashboard is accessible to all authenticated users
+        if (module === 'dashboard') return true
+        // All other users: check their actual permissions from the backend
         return user.permissions?.some((p) => p.startsWith(`${module}:`)) ?? false
       },
 
       canAccessBranch: (branchId: number) => {
         const { user } = get()
         if (!user) return false
-        if (user.role?.role_type === 'admin') return true
+        // Platform admins can access all branches (for viewing company data)
+        if (user.is_platform_admin) return true
+        // All other users: check their allowed branches from the backend
         return user.allowed_branches?.includes(branchId) ?? false
       },
 

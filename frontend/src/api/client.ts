@@ -1,5 +1,6 @@
 import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'axios'
 import toast from 'react-hot-toast'
+import { sanitizeErrorMessage } from '../utils/errorSanitizer'
 
 const API_URL = import.meta.env.VITE_API_URL || '/api/v1'
 
@@ -11,41 +12,42 @@ const apiClient: AxiosInstance = axios.create({
   },
 })
 
-// Token management
+// Token management - Uses sessionStorage for better security than localStorage
+// sessionStorage is cleared when the browser tab closes, reducing XSS attack window
 let accessToken: string | null = null
 
 export const setAccessToken = (token: string | null) => {
   accessToken = token
   if (token) {
-    localStorage.setItem('access_token', token)
+    sessionStorage.setItem('access_token', token)
   } else {
-    localStorage.removeItem('access_token')
+    sessionStorage.removeItem('access_token')
   }
 }
 
 export const getAccessToken = (): string | null => {
   if (!accessToken) {
-    accessToken = localStorage.getItem('access_token')
+    accessToken = sessionStorage.getItem('access_token')
   }
   return accessToken
 }
 
 export const setRefreshToken = (token: string | null) => {
   if (token) {
-    localStorage.setItem('refresh_token', token)
+    sessionStorage.setItem('refresh_token', token)
   } else {
-    localStorage.removeItem('refresh_token')
+    sessionStorage.removeItem('refresh_token')
   }
 }
 
 export const getRefreshToken = (): string | null => {
-  return localStorage.getItem('refresh_token')
+  return sessionStorage.getItem('refresh_token')
 }
 
 export const clearTokens = () => {
   accessToken = null
-  localStorage.removeItem('access_token')
-  localStorage.removeItem('refresh_token')
+  sessionStorage.removeItem('access_token')
+  sessionStorage.removeItem('refresh_token')
 }
 
 // Request interceptor - Add auth token
@@ -97,13 +99,12 @@ apiClient.interceptors.response.use(
       }
     }
 
-    // Handle other errors
+    // Handle other errors with sanitized messages
     if (error.response?.status === 400) {
-      // Extract error message from response data
       const errorData = error.response.data as { error?: string; detail?: string; message?: string }
-      const errorMsg = errorData?.error || errorData?.detail || errorData?.message
-      if (errorMsg) {
-        toast.error(errorMsg)
+      const rawMessage = errorData?.error || errorData?.detail || errorData?.message
+      if (rawMessage) {
+        toast.error(sanitizeErrorMessage(rawMessage))
       }
     } else if (error.response?.status === 403) {
       toast.error('No tienes permisos para realizar esta acción')
@@ -111,6 +112,8 @@ apiClient.interceptors.response.use(
       toast.error('Recurso no encontrado')
     } else if (error.response?.status === 500) {
       toast.error('Error del servidor. Por favor intenta más tarde.')
+    } else if (!error.response) {
+      toast.error('Error de conexión. Verifica tu conexión a internet.')
     }
 
     return Promise.reject(error)

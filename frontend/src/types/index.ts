@@ -199,6 +199,7 @@ export interface User {
   allowed_branches?: number[]
   is_active: boolean
   is_platform_admin?: boolean
+  can_create_roles?: boolean
   created_at: string
   updated_at: string
   last_login?: string
@@ -251,6 +252,9 @@ export interface Category {
 
 export type ProductUnit = 'unit' | 'kg' | 'g' | 'l' | 'ml' | 'm' | 'box' | 'pack'
 
+// Stock status thresholds: stock (>= 10), stock-bajo (4-9), sin-stock (<= 3)
+export type StockStatus = 'stock' | 'stock-bajo' | 'sin-stock'
+
 export interface Product {
   id: number
   name: string
@@ -267,6 +271,7 @@ export interface Product {
   min_stock: number
   max_stock: number
   total_stock?: number
+  stock_status?: StockStatus
   image?: string
   is_active: boolean
   is_sellable: boolean
@@ -285,6 +290,7 @@ export interface BranchStock {
   quantity: number
   reserved_quantity: number
   available_quantity?: number
+  stock_status?: StockStatus
   is_low_stock?: boolean
   is_out_of_stock?: boolean
   updated_at?: string

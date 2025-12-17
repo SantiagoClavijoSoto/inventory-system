@@ -37,6 +37,7 @@ import {
   Building2,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { extractErrorMessage } from '@/utils/errorSanitizer'
 import type { Employee, CreateEmployeeRequest, UpdateEmployeeRequest } from '@/types'
 
 const EMPLOYMENT_TYPE_OPTIONS = [
@@ -494,9 +495,8 @@ function EmployeeFormModal({ isOpen, onClose, employee, branches }: EmployeeForm
       toast.success('Empleado creado correctamente')
       onClose()
     },
-    onError: (error: any) => {
-      const message = error.response?.data?.detail || error.response?.data?.error || 'Error al crear el empleado'
-      toast.error(message)
+    onError: (error: unknown) => {
+      toast.error(extractErrorMessage(error, 'create'))
     },
   })
 
@@ -508,9 +508,8 @@ function EmployeeFormModal({ isOpen, onClose, employee, branches }: EmployeeForm
       toast.success('Empleado actualizado correctamente')
       onClose()
     },
-    onError: (error: any) => {
-      const message = error.response?.data?.detail || error.response?.data?.error || 'Error al actualizar el empleado'
-      toast.error(message)
+    onError: (error: unknown) => {
+      toast.error(extractErrorMessage(error, 'update'))
     },
   })
 

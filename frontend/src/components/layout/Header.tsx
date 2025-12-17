@@ -89,8 +89,9 @@ export function Header() {
         const response = await branchesApi.getAll({ is_active: true })
         setBranches(response.results)
 
-        // Auto-select first branch if none selected
-        if (!currentBranch && response.results.length > 0) {
+        // Auto-select branch if none selected or current branch is not in the list
+        const currentBranchExists = currentBranch && response.results.some(b => b.id === currentBranch.id)
+        if ((!currentBranch || !currentBranchExists) && response.results.length > 0) {
           const defaultBranch = response.results.find(b => b.is_main) || response.results[0]
           handleBranchSelect(defaultBranch)
         }

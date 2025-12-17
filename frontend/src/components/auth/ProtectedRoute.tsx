@@ -14,7 +14,7 @@ export function ProtectedRoute({
   requiredModule,
 }: ProtectedRouteProps) {
   const location = useLocation()
-  const { isAuthenticated, isLoading, hasPermission, hasModulePermission, user } =
+  const { isAuthenticated, isLoading, hasPermission, hasModulePermission } =
     useAuthStore()
   const isPlatformAdmin = useIsPlatformAdmin()
 
@@ -41,19 +41,15 @@ export function ProtectedRoute({
   }
 
   // Check specific permission if required
+  // hasPermission already handles platform admin access, so just check directly
   if (requiredPermission && !hasPermission(requiredPermission)) {
-    // Admins bypass permission checks
-    if (user?.role?.role_type !== 'admin') {
-      return <Navigate to="/unauthorized" replace />
-    }
+    return <Navigate to="/unauthorized" replace />
   }
 
   // Check module access if required
+  // hasModulePermission already handles platform admin access, so just check directly
   if (requiredModule && !hasModulePermission(requiredModule)) {
-    // Admins bypass module checks
-    if (user?.role?.role_type !== 'admin') {
-      return <Navigate to="/unauthorized" replace />
-    }
+    return <Navigate to="/unauthorized" replace />
   }
 
   return <>{children}</>

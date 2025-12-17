@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useAuthStore } from '@/store/authStore'
+import { useAuthStore, useIsPlatformAdmin } from '@/store/authStore'
 import {
   branchesApi,
   type Branch,
@@ -43,7 +43,6 @@ import { formatCurrency } from '@/utils/formatters'
 
 export function Branches() {
   const queryClient = useQueryClient()
-  const { user } = useAuthStore()
 
   // State
   const [search, setSearch] = useState('')
@@ -138,7 +137,10 @@ export function Branches() {
     }
   }
 
-  const isAdmin = user?.is_platform_admin || user?.role?.role_type === 'admin'
+  const isPlatformAdmin = useIsPlatformAdmin()
+  const { hasPermission } = useAuthStore()
+  // Check if user can edit branches based on actual permissions
+  const canEditBranches = isPlatformAdmin || hasPermission('branches:edit')
 
   return (
     <div className="space-y-6">
@@ -150,7 +152,7 @@ export function Branches() {
             Gestiona las sucursales y su configuración de marca
           </p>
         </div>
-        {isAdmin && (
+        {canEditBranches && (
           <Button
             onClick={() => {
               setSelectedBranch(null)
@@ -215,7 +217,7 @@ export function Branches() {
             <p className="text-secondary-500 mb-4">
               {search ? 'No se encontraron sucursales con esos criterios' : 'Crea tu primera sucursal para comenzar'}
             </p>
-            {isAdmin && !search && (
+            {canEditBranches && !search && (
               <Button onClick={() => setIsFormModalOpen(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Crear Sucursal
@@ -229,7 +231,7 @@ export function Branches() {
             <BranchCard
               key={branch.id}
               branch={branch}
-              isAdmin={isAdmin}
+              canEdit={canEditBranches}
               onView={() => handleViewDetail(branch)}
               onEdit={() => handleEdit(branch)}
               onDelete={() => handleDelete(branch)}
@@ -346,7 +348,7 @@ export function Branches() {
 // Branch Card Component
 function BranchCard({
   branch,
-  isAdmin,
+  canEdit,
   onView,
   onEdit,
   onDelete,
@@ -354,7 +356,7 @@ function BranchCard({
   onSetMain,
 }: {
   branch: Branch
-  isAdmin: boolean
+  canEdit: boolean
   onView: () => void
   onEdit: () => void
   onDelete: () => void
@@ -465,7 +467,7 @@ function BranchCard({
           <Button variant="outline" size="sm" className="flex-1" onClick={onView}>
             Ver Detalles
           </Button>
-          {isAdmin && (
+          {canEdit && (
             <>
               <Button variant="outline" size="sm" onClick={onBranding} title="Configurar marca">
                 <Palette className="h-4 w-4" />
@@ -523,7 +525,7 @@ function BranchFormModal({
     closing_time: '18:00',
     tax_rate: 19,
     currency: 'COP',
-    currency_symbol: '$',
+    currency_symbol: 'COP',
   })
 
   // Reset form when modal opens
@@ -569,7 +571,7 @@ function BranchFormModal({
           closing_time: '18:00',
           tax_rate: 19,
           currency: 'COP',
-          currency_symbol: '$',
+          currency_symbol: 'COP',
         })
       }
     }

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { productApi, categoryApi } from '@/api/inventory'
+import { productApi, categoryApi, stockApi } from '@/api/inventory'
 import { useAuthStore } from '@/store/authStore'
 import {
   Card,
@@ -32,7 +32,8 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatCurrency } from '@/utils/formatters'
-import type { Product, Category, ProductUnit } from '@/types'
+import { extractErrorMessage } from '@/utils/errorSanitizer'
+import type { Product, Category, ProductUnit, Branch } from '@/types'
 
 export function Products() {
   const queryClient = useQueryClient()
@@ -48,7 +49,7 @@ export function Products() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
 
   // Queries
-  const { data: productsData, isLoading } = useQuery({
+  const { data: productsData, isLoading, isError, error } = useQuery({
     queryKey: ['products', { search, category: categoryFilter, status: statusFilter, page, branch: currentBranch?.id }],
     queryFn: () =>
       productApi.getAll({
@@ -66,11 +67,19 @@ export function Products() {
     queryFn: categoryApi.getTree,
   })
 
+  // Helper to invalidate all stock-related queries
+  const invalidateStockQueries = () => {
+    queryClient.invalidateQueries({ queryKey: ['products'] })
+    queryClient.invalidateQueries({ queryKey: ['alerts'] })
+    queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    queryClient.invalidateQueries({ queryKey: ['low-stock'] })
+  }
+
   // Mutations
   const deleteMutation = useMutation({
     mutationFn: productApi.delete,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['products'] })
+      invalidateStockQueries()
       toast.success('Producto eliminado correctamente')
       setIsDeleteModalOpen(false)
       setSelectedProduct(null)
@@ -88,13 +97,19 @@ export function Products() {
 
   const getStockBadge = (product: Product) => {
     const stock = product.total_stock || 0
-    if (stock === 0) {
-      return <Badge variant="danger">Sin stock</Badge>
+    const stockStatus = product.stock_status || 'sin-stock'
+
+    // Use backend-calculated stock_status for consistent behavior
+    // stock: >= 10 (healthy), stock-bajo: 4-9 (low), sin-stock: <= 3 (critical)
+    switch (stockStatus) {
+      case 'sin-stock':
+        return <Badge variant="danger">Sin stock ({stock})</Badge>
+      case 'stock-bajo':
+        return <Badge variant="warning">Stock bajo ({stock})</Badge>
+      case 'stock':
+      default:
+        return <Badge variant="success">{stock} unidades</Badge>
     }
-    if (stock <= product.min_stock) {
-      return <Badge variant="warning">Stock bajo</Badge>
-    }
-    return <Badge variant="success">{stock} unidades</Badge>
   }
 
   return (
@@ -187,6 +202,14 @@ export function Products() {
           {isLoading ? (
             <div className="flex items-center justify-center h-64">
               <Spinner size="lg" />
+            </div>
+          ) : isError ? (
+            <div className="flex flex-col items-center justify-center h-64 text-danger-600">
+              <AlertTriangle className="w-12 h-12 mb-4" />
+              <p className="text-lg font-medium">Error al cargar productos</p>
+              <p className="text-sm text-secondary-500">
+                {(error as Error)?.message || 'Intenta recargar la página'}
+              </p>
             </div>
           ) : productsData?.results.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-secondary-500">
@@ -314,6 +337,7 @@ export function Products() {
         }}
         product={selectedProduct}
         categories={categories || []}
+        currentBranch={currentBranch}
       />
 
       {/* Delete Confirmation Modal */}
@@ -368,9 +392,10 @@ interface ProductFormModalProps {
   onClose: () => void
   product: Product | null
   categories: Category[]
+  currentBranch: Branch | null
 }
 
-function ProductFormModal({ isOpen, onClose, product, categories }: ProductFormModalProps) {
+function ProductFormModal({ isOpen, onClose, product, categories, currentBranch }: ProductFormModalProps) {
   const queryClient = useQueryClient()
   const isEditing = !!product
 
@@ -390,6 +415,8 @@ function ProductFormModal({ isOpen, onClose, product, categories }: ProductFormM
     max_stock: '100',
     is_active: true,
     is_sellable: true,
+    initial_stock: '',  // Only for creation
+    add_stock: '',      // Only for editing
   })
 
   // Reset form when modal opens/closes or product changes
@@ -409,6 +436,8 @@ function ProductFormModal({ isOpen, onClose, product, categories }: ProductFormM
           max_stock: String(product.max_stock),
           is_active: product.is_active,
           is_sellable: product.is_sellable,
+          initial_stock: '',
+          add_stock: '',
         })
       } else {
         setFormData({
@@ -424,35 +453,84 @@ function ProductFormModal({ isOpen, onClose, product, categories }: ProductFormM
           max_stock: '100',
           is_active: true,
           is_sellable: true,
+          initial_stock: '',
+          add_stock: '',
         })
       }
     }
   }, [isOpen, product])
 
+  // Helper to invalidate all stock-related queries
+  const invalidateStockQueries = () => {
+    queryClient.invalidateQueries({ queryKey: ['products'] })
+    queryClient.invalidateQueries({ queryKey: ['alerts'] })
+    queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    queryClient.invalidateQueries({ queryKey: ['low-stock'] })
+  }
+
+  const stockAdjustMutation = useMutation({
+    mutationFn: stockApi.adjust,
+    onError: (error: unknown) => {
+      toast.error(extractErrorMessage(error, 'update'))
+    },
+  })
+
   const createMutation = useMutation({
     mutationFn: productApi.create,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['products'] })
-      toast.success('Producto creado correctamente')
+    onSuccess: async (newProduct) => {
+      // If initial stock is provided, adjust stock for the current branch
+      const initialStock = Number(formData.initial_stock)
+      if (initialStock > 0 && currentBranch?.id) {
+        try {
+          await stockAdjustMutation.mutateAsync({
+            product_id: newProduct.id,
+            branch_id: currentBranch.id,
+            adjustment_type: 'set',
+            quantity: initialStock,
+            reason: 'Stock inicial al crear producto',
+          })
+          toast.success(`Producto creado con ${initialStock} unidades en stock`)
+        } catch {
+          toast.success('Producto creado, pero hubo un error al establecer el stock inicial')
+        }
+      } else {
+        toast.success('Producto creado correctamente')
+      }
+      invalidateStockQueries()
       onClose()
     },
-    onError: (error: any) => {
-      const message = error.response?.data?.detail || 'Error al crear el producto'
-      toast.error(message)
+    onError: (error: unknown) => {
+      toast.error(extractErrorMessage(error, 'create'))
     },
   })
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: Partial<Product> }) =>
       productApi.update(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['products'] })
-      toast.success('Producto actualizado correctamente')
+    onSuccess: async () => {
+      // If add_stock is provided, add stock to the current branch
+      const addStock = Number(formData.add_stock)
+      if (addStock > 0 && currentBranch?.id && product) {
+        try {
+          await stockAdjustMutation.mutateAsync({
+            product_id: product.id,
+            branch_id: currentBranch.id,
+            adjustment_type: 'add',
+            quantity: addStock,
+            reason: 'Reposición de stock',
+          })
+          toast.success(`Producto actualizado y se agregaron ${addStock} unidades al stock`)
+        } catch {
+          toast.success('Producto actualizado, pero hubo un error al agregar stock')
+        }
+      } else {
+        toast.success('Producto actualizado correctamente')
+      }
+      invalidateStockQueries()
       onClose()
     },
-    onError: (error: any) => {
-      const message = error.response?.data?.detail || 'Error al actualizar el producto'
-      toast.error(message)
+    onError: (error: unknown) => {
+      toast.error(extractErrorMessage(error, 'update'))
     },
   })
 
@@ -465,9 +543,8 @@ function ProductFormModal({ isOpen, onClose, product, categories }: ProductFormM
       setIsCategoryModalOpen(false)
       setNewCategoryName('')
     },
-    onError: (error: any) => {
-      const message = error.response?.data?.detail || 'Error al crear la categoría'
-      toast.error(message)
+    onError: (error: unknown) => {
+      toast.error(extractErrorMessage(error, 'create'))
     },
   })
 
@@ -479,6 +556,23 @@ function ProductFormModal({ isOpen, onClose, product, categories }: ProductFormM
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+
+    // Frontend validations
+    const costPrice = Number(formData.cost_price)
+    const salePrice = Number(formData.sale_price)
+    const minStock = Number(formData.min_stock)
+    const maxStock = Number(formData.max_stock)
+
+    if (salePrice < costPrice) {
+      toast.error('El precio de venta no puede ser menor al precio de costo')
+      return
+    }
+
+    if (minStock > maxStock) {
+      toast.error('El stock mínimo no puede ser mayor al stock máximo')
+      return
+    }
+
     const data: Partial<Product> = {
       name: formData.name,
       sku: formData.sku,
@@ -501,7 +595,7 @@ function ProductFormModal({ isOpen, onClose, product, categories }: ProductFormM
     }
   }
 
-  const isLoading = createMutation.isPending || updateMutation.isPending
+  const isLoading = createMutation.isPending || updateMutation.isPending || stockAdjustMutation.isPending
 
   return (
     <>
@@ -557,11 +651,25 @@ function ProductFormModal({ isOpen, onClose, product, categories }: ProductFormM
           </div>
         </div>
 
+        <div>
+          <label className="block text-sm font-medium text-secondary-700 mb-1">
+            Descripción
+          </label>
+          <textarea
+            value={formData.description}
+            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+            placeholder="Descripción del producto (opcional)"
+            rows={2}
+            className="w-full px-3 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+          />
+        </div>
+
         <div className="grid grid-cols-3 gap-4">
           <Input
             label="Precio de costo"
             type="number"
             step="0.01"
+            min="0"
             value={formData.cost_price}
             onChange={(e) => setFormData({ ...formData, cost_price: e.target.value })}
             required
@@ -570,6 +678,7 @@ function ProductFormModal({ isOpen, onClose, product, categories }: ProductFormM
             label="Precio de venta"
             type="number"
             step="0.01"
+            min="0"
             value={formData.sale_price}
             onChange={(e) => setFormData({ ...formData, sale_price: e.target.value })}
             required
@@ -607,6 +716,63 @@ function ProductFormModal({ isOpen, onClose, product, categories }: ProductFormM
             required
           />
         </div>
+
+        {/* Stock quantity section */}
+        {currentBranch ? (
+          <div className="p-4 bg-secondary-50 rounded-lg border border-secondary-200">
+            <div className="flex items-center gap-2 mb-3">
+              <Package className="w-4 h-4 text-secondary-600" />
+              <span className="text-sm font-medium text-secondary-700">
+                Stock en {currentBranch.name}
+              </span>
+            </div>
+            {isEditing ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-secondary-600">Stock actual:</span>
+                  <span className="font-semibold text-secondary-900">
+                    {product?.total_stock || 0} unidades
+                  </span>
+                </div>
+                <Input
+                  label="Agregar stock (opcional)"
+                  type="number"
+                  min="0"
+                  value={formData.add_stock}
+                  onChange={(e) => setFormData({ ...formData, add_stock: e.target.value })}
+                  placeholder="Cantidad a agregar"
+                />
+                {formData.add_stock && Number(formData.add_stock) > 0 && (
+                  <p className="text-xs text-success-600">
+                    Se agregarán {formData.add_stock} unidades al stock actual
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Input
+                  label="Stock inicial (opcional)"
+                  type="number"
+                  min="0"
+                  value={formData.initial_stock}
+                  onChange={(e) => setFormData({ ...formData, initial_stock: e.target.value })}
+                  placeholder="Cantidad inicial en stock"
+                />
+                {!formData.initial_stock && (
+                  <p className="text-xs text-secondary-500">
+                    Si no especificas un valor, el producto se creará sin stock
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="p-4 bg-warning-50 rounded-lg border border-warning-200">
+            <p className="text-sm text-warning-700">
+              Selecciona una sucursal para poder gestionar el stock del producto
+            </p>
+          </div>
+        )}
 
         <div className="flex gap-4">
           <label className="flex items-center gap-2">

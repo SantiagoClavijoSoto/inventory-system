@@ -3,7 +3,8 @@ import { apiClient } from './client'
 // Types
 export interface Permission {
   id: number
-  codename: string
+  code: string
+  name: string
   module: string
   action: string
   description: string
@@ -37,6 +38,8 @@ export interface User {
   company_id: number | null
   company_name: string | null
   is_company_admin: boolean
+  // Permission flags
+  can_create_roles: boolean
   created_at: string
   updated_at: string
 }
@@ -45,6 +48,7 @@ export interface UserListParams {
   search?: string
   is_active?: boolean
   role?: number
+  default_branch?: number
   page?: number
   page_size?: number
 }
@@ -108,48 +112,48 @@ export const authApi = {
 export const usersApi = {
   // Get all users
   getAll: async (params?: UserListParams): Promise<PaginatedResponse<User>> => {
-    const response = await apiClient.get('/users/', { params })
+    const response = await apiClient.get('/auth/users/', { params })
     return response.data
   },
 
   // Get single user
   getById: async (id: number): Promise<User> => {
-    const response = await apiClient.get(`/users/${id}/`)
+    const response = await apiClient.get(`/auth/users/${id}/`)
     return response.data
   },
 
   // Create user
   create: async (data: CreateUserRequest): Promise<User> => {
-    const response = await apiClient.post('/users/', data)
+    const response = await apiClient.post('/auth/users/', data)
     return response.data
   },
 
   // Update user
   update: async (id: number, data: UpdateUserRequest): Promise<User> => {
-    const response = await apiClient.patch(`/users/${id}/`, data)
+    const response = await apiClient.patch(`/auth/users/${id}/`, data)
     return response.data
   },
 
   // Delete user
   delete: async (id: number): Promise<void> => {
-    await apiClient.delete(`/users/${id}/`)
+    await apiClient.delete(`/auth/users/${id}/`)
   },
 
   // Activate user
   activate: async (id: number): Promise<{ message: string }> => {
-    const response = await apiClient.post(`/users/${id}/activate/`)
+    const response = await apiClient.post(`/auth/users/${id}/activate/`)
     return response.data
   },
 
   // Deactivate user
   deactivate: async (id: number): Promise<{ message: string }> => {
-    const response = await apiClient.post(`/users/${id}/deactivate/`)
+    const response = await apiClient.post(`/auth/users/${id}/deactivate/`)
     return response.data
   },
 
   // Reset password
   resetPassword: async (id: number, newPassword: string): Promise<{ message: string }> => {
-    const response = await apiClient.post(`/users/${id}/reset_password/`, {
+    const response = await apiClient.post(`/auth/users/${id}/reset_password/`, {
       new_password: newPassword,
     })
     return response.data

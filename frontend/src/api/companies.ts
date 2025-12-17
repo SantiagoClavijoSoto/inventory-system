@@ -110,6 +110,7 @@ export interface CompanyAdmin {
   role_name: string | null
   role_type: string | null
   // Permissions
+  can_create_roles: boolean
   can_manage_roles: boolean
 }
 
@@ -211,6 +212,15 @@ export const companiesApi = {
   // Get administrators for a specific company (SuperAdmin only)
   getCompanyAdmins: async (companyId: number): Promise<CompanyAdmin[]> => {
     const response = await apiClient.get(`/companies/${companyId}/company_admins/`)
+    return response.data
+  },
+
+  // Update admin permissions (SuperAdmin only)
+  updateAdminPermissions: async (
+    userId: number,
+    permissions: { can_create_roles?: boolean }
+  ): Promise<CompanyAdmin> => {
+    const response = await apiClient.patch(`/companies/admins/${userId}/permissions/`, permissions)
     return response.data
   },
 }

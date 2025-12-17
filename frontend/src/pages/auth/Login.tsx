@@ -1,39 +1,71 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { Package } from 'lucide-react'
+import { Package, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { extractErrorMessage } from '@/utils/errorSanitizer'
 
 export function Login() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { login, isLoading } = useAuthStore()
+  const { login, isAuthenticated, isLoading } = useAuthStore()
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const isSubmittingRef = useRef(false)
 
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/'
 
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated && !isLoading) {
+      navigate(from, { replace: true })
+    }
+  }, [isAuthenticated, isLoading, navigate, from])
+
+  // Show loading while checking auth status
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-primary-600 to-primary-800 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-10 h-10 animate-spin text-white mx-auto" />
+          <p className="mt-4 text-primary-200">Verificando sesión...</p>
+        </div>
+      </div>
+    )
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    // Prevent double submit
+    if (isSubmittingRef.current) return
+
     setError('')
 
-    if (!email || !password) {
+    if (!email.trim() || !password) {
       setError('Por favor ingrese email y contraseña')
       return
     }
 
+    isSubmittingRef.current = true
+    setIsSubmitting(true)
+
     try {
-      await login(email, password)
+      await login(email.trim(), password)
       toast.success('¡Bienvenido!')
       navigate(from, { replace: true })
-    } catch (err: any) {
-      const message = err.response?.data?.detail || 'Error al iniciar sesión'
+    } catch (err: unknown) {
+      const message = extractErrorMessage(err, 'auth')
       setError(message)
       toast.error(message)
+    } finally {
+      isSubmittingRef.current = false
+      setIsSubmitting(false)
     }
   }
 
@@ -65,7 +97,7 @@ export function Login() {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="correo@ejemplo.com"
               autoComplete="email"
-              autoFocus
+              disabled={isSubmitting}
             />
 
             <Input
@@ -75,13 +107,15 @@ export function Login() {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
               autoComplete="current-password"
+              disabled={isSubmitting}
             />
 
             <Button
               type="submit"
               className="w-full"
               size="lg"
-              isLoading={isLoading}
+              isLoading={isSubmitting}
+              disabled={isSubmitting}
             >
               Iniciar Sesión
             </Button>

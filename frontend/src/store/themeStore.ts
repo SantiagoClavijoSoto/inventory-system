@@ -24,7 +24,7 @@ const DEFAULT_BRANDING: BranchBranding = {
   accent_color: '#f59e0b',
   tax_rate: 19,
   currency: 'COP',
-  currency_symbol: '$',
+  currency_symbol: 'COP',
 }
 
 // Generate color shades from a hex color

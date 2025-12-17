@@ -10,7 +10,6 @@ import {
   CreditCard,
   Building,
   Calendar,
-  DollarSign,
   TrendingUp,
   AlertCircle,
   Clock,
@@ -94,11 +93,11 @@ export function Subscriptions() {
   }
 
   const formatCurrency = (amount: number, currency: string = 'COP') => {
-    return new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: currency,
+    const formatted = new Intl.NumberFormat('es-CO', {
       minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
     }).format(amount)
+    return `${currency} ${formatted}`
   }
 
   const getDaysUntilPayment = (dateString?: string) => {
@@ -340,12 +339,9 @@ export function Subscriptions() {
                         </span>
                       </td>
                       <td className="px-4 py-4">
-                        <div className="flex items-center gap-1">
-                          <DollarSign className="w-4 h-4 text-secondary-400" />
-                          <span className="text-sm font-medium text-secondary-900">
-                            {formatCurrency(subscription.amount, subscription.currency)}
-                          </span>
-                        </div>
+                        <span className="text-sm font-medium text-secondary-900">
+                          {formatCurrency(subscription.amount, subscription.currency)}
+                        </span>
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-2">
