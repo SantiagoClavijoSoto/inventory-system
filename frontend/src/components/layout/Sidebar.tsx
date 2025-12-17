@@ -15,6 +15,7 @@ import {
   Bell,
   LogOut,
   CreditCard,
+  Clock,
 } from 'lucide-react'
 
 interface NavItem {
@@ -29,6 +30,7 @@ const regularNavigation: NavItem[] = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard, module: 'dashboard' },
   { name: 'Inventario', href: '/inventory', icon: Package, module: 'inventory' },
   { name: 'Empleados', href: '/employees', icon: Users, module: 'employees' },
+  { name: 'Horario', href: '/schedule', icon: Clock, module: 'employees' },
   { name: 'Proveedores', href: '/suppliers', icon: Truck, module: 'suppliers' },
   { name: 'Reportes', href: '/reports', icon: FileText, module: 'reports' },
   { name: 'Alertas', href: '/alerts', icon: Bell, module: 'alerts' },
@@ -101,10 +103,17 @@ export function Sidebar() {
       <nav className="flex-1 overflow-y-auto py-4 px-3">
         <ul className="space-y-1">
           {navigation.map((item) => {
-            // Platform admins have access to all their navigation items
-            // Regular users need module permission check
+            // Check module permission based on user's actual permissions
+            // Platform admins have access via is_platform_admin check in hasModulePermission
+            // Regular users need module permission check against their real permissions
             const hasAccess = useModulePermission(item.module)
-            if (!isPlatformAdmin && !hasAccess && user?.role?.role_type !== 'admin') return null
+
+            // Special case: Schedule (Horario) is accessible to ALL authenticated users
+            // because every employee needs to clock in/out regardless of role
+            const isSchedulePage = item.href === '/schedule'
+
+            // Show item only if user has access to the module or it's the schedule page
+            if (!isPlatformAdmin && !isSchedulePage && !hasAccess) return null
 
             const isActive =
               item.href === '/'

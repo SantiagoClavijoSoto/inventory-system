@@ -9,6 +9,7 @@ import { Login } from '@/pages/auth/Login'
 import { Dashboard } from '@/pages/dashboard/Dashboard'
 import { Products } from '@/pages/inventory/Products'
 import { Employees } from '@/pages/employees/Employees'
+import { Schedule } from '@/pages/schedule/Schedule'
 import { Suppliers } from '@/pages/suppliers/Suppliers'
 import { Reports } from '@/pages/reports/Reports'
 import { Alerts } from '@/pages/alerts/Alerts'
@@ -100,6 +101,12 @@ export const router = createBrowserRouter([
             <PlaceholderPage title="Detalle de Empleado" />
           </ProtectedRoute>
         ),
+      },
+      {
+        path: 'schedule',
+        // No requiredModule - Schedule is accessible to ALL authenticated users
+        // Every employee needs to clock in/out regardless of role
+        element: <Schedule />,
       },
       {
         path: 'suppliers',
