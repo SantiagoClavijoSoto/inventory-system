@@ -12,6 +12,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework_simplejwt.exceptions import TokenError
 from drf_spectacular.utils import extend_schema, extend_schema_view
 
+from core.mixins import TenantQuerySetMixin
 from .models import User, Role, Permission
 from .serializers import (
     UserSerializer,
@@ -134,12 +135,17 @@ class ChangePasswordView(APIView):
     partial_update=extend_schema(tags=['Usuarios']),
     destroy=extend_schema(tags=['Usuarios']),
 )
-class UserViewSet(viewsets.ModelViewSet):
-    """ViewSet for user management (admin only)."""
-    queryset = User.objects.select_related('role').prefetch_related('allowed_branches')
+class UserViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
+    """ViewSet for user management (admin only).
+
+    Multi-tenant: Users are filtered by company automatically via TenantQuerySetMixin.
+    SuperAdmins can see all users across companies.
+    """
+    queryset = User.objects.select_related('role', 'company', 'default_branch').prefetch_related('allowed_branches')
     permission_classes = [IsAuthenticated, HasPermission]
     required_permission = 'settings:view'
-    filterset_fields = ['is_active', 'role']
+    tenant_field = 'company'  # Filter users by their company
+    filterset_fields = ['is_active', 'role', 'default_branch']
     search_fields = ['email', 'first_name', 'last_name']
     ordering_fields = ['created_at', 'first_name', 'last_name']
     ordering = ['-created_at']
@@ -195,12 +201,17 @@ class UserViewSet(viewsets.ModelViewSet):
     partial_update=extend_schema(tags=['Roles']),
     destroy=extend_schema(tags=['Roles']),
 )
-class RoleViewSet(viewsets.ModelViewSet):
-    """ViewSet for role management."""
-    queryset = Role.objects.prefetch_related('permissions')
+class RoleViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
+    """ViewSet for role management.
+
+    Multi-tenant: Roles are filtered by company automatically via TenantQuerySetMixin.
+    SuperAdmins can see all roles across companies.
+    """
+    queryset = Role.objects.select_related('company').prefetch_related('permissions')
     serializer_class = RoleSerializer
     permission_classes = [IsAuthenticated, HasPermission]
     required_permission = 'settings:view'
+    tenant_field = 'company'  # Filter roles by their company
     filterset_fields = ['is_active', 'role_type']
     search_fields = ['name', 'description']
     ordering = ['name']
@@ -209,6 +220,21 @@ class RoleViewSet(viewsets.ModelViewSet):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
             self.required_permission = 'settings:edit'
         return super().get_permissions()
+
+    def create(self, request, *args, **kwargs):
+        """Create a new role. Requires can_create_roles permission."""
+        user = request.user
+
+        # SuperAdmins can always create roles
+        if not user.is_superuser:
+            # Check if user has permission to create roles
+            if not user.can_create_roles:
+                return Response(
+                    {'error': 'No tienes permiso para crear nuevos roles. Solo puedes editar roles existentes.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+        return super().create(request, *args, **kwargs)
 
     @action(detail=False, methods=['post'])
     def setup_defaults(self, request):
@@ -227,3 +253,5 @@ class PermissionListView(generics.ListAPIView):
     required_permission = 'settings:view'
     filterset_fields = ['module', 'action']
     ordering = ['module', 'action']
+    # Disable pagination - permissions are a small, fixed list that should all be returned
+    pagination_class = None
