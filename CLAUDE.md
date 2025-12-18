@@ -16,8 +16,77 @@ Entonces Claude DEBE asumir que:
   - Evitar redundancias
   - No pedir confirmación para tareas claras
   - Proponer supuestos razonables cuando falte info, y marcarlo como suposición
-  - Leer el archivo README.md ubicado en /inventory-system y ejecutar la compilación del proyecto para verlo de manera local en la web.
-  - **IMPORTANTE**: Usar siempre la base de datos Docker (ver sección "Base de Datos Local").
+  - Inicializar el proyecto siguiendo estos pasos:
+
+### Paso a paso para iniciar el proyecto
+
+#### 1. Iniciar la base de datos Docker
+La base de datos principal está en un contenedor Docker llamado `inventory_db`. Contiene datos reales (674+ ventas, 45 productos, 17 usuarios).
+
+```bash
+# Detener MySQL local si está corriendo (conflicto de puerto 3306)
+sudo systemctl stop mysql 2>/dev/null || sudo systemctl stop mariadb 2>/dev/null
+
+# Iniciar el contenedor de MySQL
+docker start inventory_db
+
+# Verificar que está corriendo
+docker ps | grep inventory_db
+```
+
+#### 2. Iniciar el Backend (Django)
+El backend DEBE iniciarse con la variable `DATABASE_URL` para conectar al Docker.
+
+```bash
+cd /home/santi/inventory-system/backend
+
+# Opción A: Con nix develop (recomendado)
+nix develop /home/santi/inventory-system --command bash -c "export DATABASE_URL='mysql://inventory_user:inventorypass@127.0.0.1:3306/inventory_db' && python manage.py runserver 8000"
+
+# Opción B: En background
+nix develop /home/santi/inventory-system --command bash -c "export DATABASE_URL='mysql://inventory_user:inventorypass@127.0.0.1:3306/inventory_db' && python manage.py runserver 8000" &
+```
+
+#### 3. Iniciar el Frontend (React/Vite)
+```bash
+cd /home/santi/inventory-system/frontend
+npm run dev
+```
+
+#### 4. URLs de acceso
+- **Frontend**: http://localhost:5173 (o 5174 si 5173 está ocupado)
+- **Backend API**: http://localhost:8000/api/v1/
+
+#### 5. Credenciales de prueba
+| Email | Password | Empresa |
+|-------|----------|---------|
+| admin@tornillofeliz.com | Tornillo.Admin1 | Ferretería El Tornillo Feliz |
+| admin@modaelegante.com | (resetear si necesario) | Boutique Moda Elegante |
+| admin@saludtotal.com | (resetear si necesario) | Farmacia Salud Total |
+| superadmin@platform.local | (resetear si necesario) | Platform Admin |
+
+#### 6. Datos en la base de datos Docker
+- **3 empresas**: Ferretería, Boutique, Farmacia
+- **674+ ventas** registradas
+- **45 productos**
+- **17 usuarios**
+- **6 sucursales**
+
+#### IMPORTANTE
+- **NO usar MySQL local** - los datos reales están en Docker
+- Si el password no funciona, resetearlo con Django shell:
+  ```bash
+  nix develop /home/santi/inventory-system --command bash -c "
+  export DATABASE_URL='mysql://inventory_user:inventorypass@127.0.0.1:3306/inventory_db'
+  python manage.py shell -c \"
+  from apps.users.models import User
+  user = User.objects.get(email='admin@tornillofeliz.com')
+  user.set_password('Tornillo.Admin1')
+  user.save()
+  print('Password actualizado')
+  \"
+  "
+  ```
 
 Y Claude DEBE responder con el siguiente texto, en una sola línea y sin variar ni una palabra:
 "claro que si manito para que estamos, ya analise todo lo necesario, ya tengo claras las reglas que debo seguir y como debo ejecutar las intrucciones, vamos a darle a fuego"
@@ -94,50 +163,6 @@ Claude debe:
 - Pensar siempre en multi-tenancy
 - No proponer soluciones que rompan aislamiento
 - Considerar escalabilidad y mantenibilidad
-
-
----
-
-## 3.1 Base de Datos Local (IMPORTANTE)
-
-### Configuración obligatoria
-Para desarrollo local, **SIEMPRE** usar la base de datos Docker con seeds preconfigurados.
-
-### Detalles de conexión
-| Parámetro | Valor |
-|-----------|-------|
-| Contenedor Docker | `inventory_db` |
-| Host | `127.0.0.1` |
-| Puerto | `3306` |
-| Base de datos | `inventory_db` |
-| Usuario | `inventory_user` |
-| Contraseña | `inventorypass` |
-| DATABASE_URL | `mysql://inventory_user:inventorypass@127.0.0.1:3306/inventory_db` |
-
-### Volumen persistente
-- **Nombre**: `inventory-system_mysql_data`
-- **Ruta física**: `/var/lib/docker/volumes/inventory-system_mysql_data/_data`
-- Los datos persisten aunque se apague el computador o se reinicie Docker
-
-### Comandos de inicio
-```bash
-# 1. Detener MySQL local si está corriendo (evitar conflicto puerto 3306)
-sudo systemctl stop mysql
-
-# 2. Iniciar contenedor Docker
-docker start inventory_db
-
-# 3. Iniciar backend (desde /inventory-system/backend)
-nix develop --command sh -c 'export DATABASE_URL="mysql://inventory_user:inventorypass@127.0.0.1:3306/inventory_db" && python manage.py runserver'
-
-# 4. Iniciar frontend (desde /inventory-system/frontend)
-npm run dev
-```
-
-### Usuarios de prueba
-Todos los usuarios tienen contraseña: `Demo1234`
-
-⚠️ **Nunca usar la base de datos local `inventory_local`** - siempre Docker.
 
 
 ---

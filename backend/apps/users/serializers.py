@@ -6,6 +6,7 @@ from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import User, Role, Permission
+from apps.companies.models import Company
 
 
 class PermissionSerializer(serializers.ModelSerializer):
@@ -75,6 +76,7 @@ class UserSerializer(serializers.ModelSerializer):
             'phone', 'avatar', 'role', 'role_id', 'role_name', 'permissions',
             'default_branch', 'default_branch_name', 'allowed_branches', 'is_active',
             'is_platform_admin', 'is_company_admin', 'can_create_roles',
+            'must_change_password',
             'company_id', 'company_name',
             'created_at', 'updated_at', 'last_login'
         ]
@@ -98,7 +100,11 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class UserCreateSerializer(serializers.ModelSerializer):
-    """Serializer for creating new users."""
+    """Serializer for creating new users.
+
+    SuperAdmin can specify company_id to assign the user to a company.
+    Regular admins create users within their own company (handled by mixin).
+    """
     password = serializers.CharField(
         write_only=True,
         required=True,
@@ -116,13 +122,21 @@ class UserCreateSerializer(serializers.ModelSerializer):
         source='role',
         required=False
     )
+    company_id = serializers.PrimaryKeyRelatedField(
+        queryset=Company.active_objects.all(),
+        write_only=True,
+        source='company',
+        required=False,
+        help_text='Company ID (only for SuperAdmin)'
+    )
 
     class Meta:
         model = User
         fields = [
             'email', 'password', 'password_confirm',
             'first_name', 'last_name', 'phone',
-            'role_id', 'default_branch', 'allowed_branches'
+            'role_id', 'default_branch', 'allowed_branches',
+            'company_id'
         ]
 
     def validate(self, attrs):
@@ -130,13 +144,35 @@ class UserCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({
                 'password_confirm': 'Las contraseñas no coinciden.'
             })
+
+        # If SuperAdmin is creating, company_id is required
+        request = self.context.get('request')
+        if request and request.user.is_superuser:
+            if not attrs.get('company'):
+                raise serializers.ValidationError({
+                    'company_id': 'Debe especificar una empresa para el usuario.'
+                })
+
         return attrs
 
     def create(self, validated_data):
         allowed_branches = validated_data.pop('allowed_branches', [])
         password = validated_data.pop('password')
+
+        # Check if SuperAdmin is creating this user
+        request = self.context.get('request')
+        is_superadmin_creating = request and request.user.is_superuser
+
         user = User(**validated_data)
         user.set_password(password)
+
+        # If SuperAdmin creates user with company, mark as company admin
+        if is_superadmin_creating and user.company_id:
+            user.is_company_admin = True
+
+        # Force password change on first login
+        user.must_change_password = True
+
         user.save()
         if allowed_branches:
             user.allowed_branches.set(allowed_branches)

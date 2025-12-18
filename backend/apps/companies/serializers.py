@@ -12,6 +12,12 @@ class CompanySerializer(serializers.ModelSerializer):
     product_count = serializers.IntegerField(read_only=True)
     plan_limits = serializers.SerializerMethodField()
     owner_email = serializers.EmailField(source='owner.email', read_only=True)
+    subscription_status = serializers.ChoiceField(
+        choices=Subscription.STATUS_CHOICES,
+        required=False,
+        write_only=True,
+        help_text='Estado de la suscripción (solo escritura)'
+    )
 
     class Meta:
         model = Company
@@ -25,6 +31,8 @@ class CompanySerializer(serializers.ModelSerializer):
             'plan', 'max_branches', 'max_users', 'max_products',
             # Status
             'is_active', 'owner', 'owner_email',
+            # Subscription
+            'subscription_status',
             # Computed
             'branch_count', 'user_count', 'product_count', 'plan_limits',
             # Timestamps
@@ -37,6 +45,19 @@ class CompanySerializer(serializers.ModelSerializer):
 
     def get_plan_limits(self, obj):
         return obj.get_plan_limits()
+
+    def update(self, instance, validated_data):
+        """Update company and optionally update subscription status."""
+        subscription_status = validated_data.pop('subscription_status', None)
+        company = super().update(instance, validated_data)
+
+        # Update subscription status if provided
+        if subscription_status and hasattr(company, 'subscription'):
+            subscription = company.subscription
+            subscription.status = subscription_status
+            subscription.save(update_fields=['status'])
+
+        return company
 
 
 class SubscriptionSerializer(serializers.ModelSerializer):
@@ -92,6 +113,18 @@ class CompanyListSerializer(serializers.ModelSerializer):
 
 class CompanyCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating companies."""
+    billing_cycle = serializers.ChoiceField(
+        choices=Subscription.BILLING_CYCLE_CHOICES,
+        default='monthly',
+        write_only=True,
+        help_text='Ciclo de facturación para la suscripción'
+    )
+    subscription_status = serializers.ChoiceField(
+        choices=Subscription.STATUS_CHOICES,
+        default='trial',
+        write_only=True,
+        help_text='Estado inicial de la suscripción'
+    )
 
     class Meta:
         model = Company
@@ -100,7 +133,8 @@ class CompanyCreateSerializer(serializers.ModelSerializer):
             'logo', 'primary_color', 'secondary_color',
             'email', 'phone', 'website', 'address',
             'plan', 'max_branches', 'max_users', 'max_products',
-            'is_active', 'owner'
+            'is_active', 'owner',
+            'billing_cycle', 'subscription_status',
         ]
 
     def validate_slug(self, value):
@@ -118,6 +152,16 @@ class CompanyCreateSerializer(serializers.ModelSerializer):
         return value
 
     validate_secondary_color = validate_primary_color
+
+    def create(self, validated_data):
+        """Create company and mark it to skip signal subscription creation."""
+        billing_cycle = validated_data.pop('billing_cycle', 'monthly')
+        subscription_status = validated_data.pop('subscription_status', 'trial')
+        company = super().create(validated_data)
+        # Store for signal to use
+        company._billing_cycle = billing_cycle
+        company._subscription_status = subscription_status
+        return company
 
 
 class CompanySimpleSerializer(serializers.ModelSerializer):

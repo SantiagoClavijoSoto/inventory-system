@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
@@ -81,27 +81,31 @@ export function Header() {
     },
   })
 
+  // Fetch branches callback
+  const fetchBranches = useCallback(async () => {
+    setIsLoadingBranches(true)
+    try {
+      const response = await branchesApi.getAll({ is_active: true })
+      setBranches(response.results)
+
+      // Auto-select branch if none selected or current branch is not in the list
+      const currentBranchExists = currentBranch && response.results.some(b => b.id === currentBranch.id)
+      if ((!currentBranch || !currentBranchExists) && response.results.length > 0) {
+        const defaultBranch = response.results.find(b => b.is_main) || response.results[0]
+        setCurrentBranch(defaultBranch)
+        loadBranding(defaultBranch.id)
+      }
+    } catch (error) {
+      console.error('Error fetching branches:', error)
+    } finally {
+      setIsLoadingBranches(false)
+    }
+  }, [currentBranch, setCurrentBranch, loadBranding])
+
   // Fetch branches on mount
   useEffect(() => {
-    const fetchBranches = async () => {
-      setIsLoadingBranches(true)
-      try {
-        const response = await branchesApi.getAll({ is_active: true })
-        setBranches(response.results)
-
-        // Auto-select branch if none selected or current branch is not in the list
-        const currentBranchExists = currentBranch && response.results.some(b => b.id === currentBranch.id)
-        if ((!currentBranch || !currentBranchExists) && response.results.length > 0) {
-          const defaultBranch = response.results.find(b => b.is_main) || response.results[0]
-          handleBranchSelect(defaultBranch)
-        }
-      } catch (error) {
-        console.error('Error fetching branches:', error)
-      } finally {
-        setIsLoadingBranches(false)
-      }
-    }
     fetchBranches()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Close dropdowns when clicking outside

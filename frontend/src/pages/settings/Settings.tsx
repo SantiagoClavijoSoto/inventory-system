@@ -452,6 +452,13 @@ function UsersSettings() {
     queryFn: branchesApi.getSimple,
   })
 
+  // Companies for SuperAdmin to assign when creating users
+  const { data: companies } = useQuery({
+    queryKey: ['companies-simple'],
+    queryFn: companiesApi.getSimple,
+    enabled: isPlatformAdmin,
+  })
+
   const deleteMutation = useMutation({
     mutationFn: usersApi.delete,
     onSuccess: () => {
@@ -631,6 +638,8 @@ function UsersSettings() {
         }}
         user={selectedUser}
         branches={branches || []}
+        isPlatformAdmin={isPlatformAdmin}
+        companies={companies || []}
       />
 
       {/* Delete Modal */}
@@ -681,14 +690,18 @@ function UserFormModal({
   onClose,
   user,
   branches,
+  isPlatformAdmin = false,
+  companies = [],
 }: {
   isOpen: boolean
   onClose: () => void
   user: User | null
   branches: BranchSimple[]
+  isPlatformAdmin?: boolean
+  companies?: { id: number; name: string }[]
 }) {
   const queryClient = useQueryClient()
-  const [formData, setFormData] = useState<Omit<CreateUserRequest, 'role'> & { password_confirm?: string }>({
+  const [formData, setFormData] = useState<Omit<CreateUserRequest, 'role'> & { password_confirm?: string; company_id?: number }>({
     email: '',
     password: '',
     password_confirm: '',
@@ -696,6 +709,7 @@ function UserFormModal({
     last_name: '',
     default_branch: undefined,
     is_active: true,
+    company_id: undefined,
   })
 
   // Reset form when modal opens
@@ -709,6 +723,7 @@ function UserFormModal({
           last_name: user.last_name,
           default_branch: user.default_branch || undefined,
           is_active: user.is_active,
+          company_id: user.company_id || undefined,
         })
       } else {
         setFormData({
@@ -719,6 +734,7 @@ function UserFormModal({
           last_name: '',
           default_branch: undefined,
           is_active: true,
+          company_id: undefined,
         })
       }
     }
@@ -731,7 +747,19 @@ function UserFormModal({
       toast.success('Usuario creado')
       onClose()
     },
-    onError: () => toast.error('Error al crear usuario'),
+    onError: (error: unknown) => {
+      const err = error as { response?: { data?: Record<string, string[]> } }
+      const data = err.response?.data
+      if (data) {
+        const firstError = Object.entries(data)[0]
+        if (firstError) {
+          const [field, messages] = firstError
+          toast.error(`${field}: ${Array.isArray(messages) ? messages[0] : messages}`)
+          return
+        }
+      }
+      toast.error('Error al crear usuario')
+    },
   })
 
   const updateMutation = useMutation({
@@ -752,12 +780,26 @@ function UserFormModal({
       return
     }
 
+    // SuperAdmin must select a company when creating users
+    if (isPlatformAdmin && !user && !formData.company_id) {
+      toast.error('Debes seleccionar una empresa')
+      return
+    }
+
     if (user) {
-      const { password, password_confirm, ...updateData } = formData
+      const { password, password_confirm, company_id, ...updateData } = formData
       updateMutation.mutate({ id: user.id, data: updateData })
     } else {
-      const { password_confirm, ...createData } = formData
-      createMutation.mutate(createData)
+      createMutation.mutate({
+        email: formData.email,
+        password: formData.password,
+        password_confirm: formData.password_confirm || '',
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        default_branch: formData.default_branch,
+        is_active: formData.is_active,
+        company_id: formData.company_id,
+      })
     }
   }
 
@@ -803,6 +845,32 @@ function UserFormModal({
                 required
               />
             </>
+          )}
+          {/* Company selector for SuperAdmin */}
+          {isPlatformAdmin && !user && (
+            <div>
+              <label className="block text-sm font-medium text-secondary-700 mb-2">
+                <Building className="inline w-4 h-4 mr-1" />
+                Empresa *
+              </label>
+              <Select
+                options={[
+                  { value: '', label: 'Seleccionar empresa...' },
+                  ...companies.map((company) => ({ value: company.id, label: company.name })),
+                ]}
+                value={formData.company_id || ''}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    company_id: e.target.value ? Number(e.target.value) : undefined,
+                  })
+                }
+                required
+              />
+              <p className="text-xs text-secondary-500 mt-1">
+                La empresa a la que pertenecerá este administrador
+              </p>
+            </div>
           )}
           <div>
             <label className="block text-sm font-medium text-secondary-700 mb-2">
@@ -1355,17 +1423,11 @@ function RoleFormModal({
     enabled: isOpen,
   })
 
-  // Filter users: show users without role OR users with this role (when editing)
+  // Show all active users - they can be reassigned to this role
   const availableUsers = useMemo(() => {
     if (!usersData?.results) return []
-    return usersData.results.filter((user) => {
-      // Include users without a role
-      if (!user.role) return true
-      // When editing, include users that already have this role
-      if (role && user.role?.id === role.id) return true
-      return false
-    })
-  }, [usersData, role])
+    return usersData.results.filter((user) => user.is_active)
+  }, [usersData])
 
   // Reset form when modal opens
   useEffect(() => {
@@ -1395,7 +1457,7 @@ function RoleFormModal({
       if (formData.selectedUsers.length > 0) {
         await Promise.all(
           formData.selectedUsers.map((userId) =>
-            usersApi.update(userId, { role: newRole.id })
+            usersApi.update(userId, { role_id: newRole.id })
           )
         )
       }
@@ -1429,8 +1491,8 @@ function RoleFormModal({
 
         // Update users
         await Promise.all([
-          ...usersToAdd.map((userId) => usersApi.update(userId, { role: id })),
-          ...usersToRemove.map((userId) => usersApi.update(userId, { role: undefined })),
+          ...usersToAdd.map((userId) => usersApi.update(userId, { role_id: id })),
+          ...usersToRemove.map((userId) => usersApi.update(userId, { role_id: null })),
         ])
       }
 
@@ -1448,7 +1510,13 @@ function RoleFormModal({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     // Backend expects permission_ids (write_only field), not permissions (read_only)
-    const payload = { name: formData.name, description: formData.description, permission_ids: formData.permissions }
+    // role_type='admin' for SuperAdmin-created roles (backend also enforces this)
+    const payload = {
+      name: formData.name,
+      description: formData.description,
+      permission_ids: formData.permissions,
+      role_type: 'admin' as const,
+    }
     if (role) {
       updateMutation.mutate({ id: role.id, data: payload })
     } else {
@@ -1549,18 +1617,26 @@ function RoleFormModal({
               ) : (
                 <div className="grid grid-cols-2 gap-2">
                   {availableUsers.map((user) => (
-                    <label key={user.id} className="flex items-center gap-2 cursor-pointer hover:bg-white p-1 rounded">
+                    <label key={user.id} className="flex items-center gap-2 cursor-pointer hover:bg-white p-1.5 rounded">
                       <input
                         type="checkbox"
                         checked={formData.selectedUsers.includes(user.id)}
                         onChange={() => toggleUser(user.id)}
                         className="rounded border-secondary-300"
                       />
-                      <span className="text-sm text-secondary-700 truncate">
+                      <span className="text-sm text-secondary-700 truncate flex-1">
                         {user.full_name}
                       </span>
                       {user.role && (
-                        <Badge variant="secondary" className="text-xs">Actual</Badge>
+                        <Badge
+                          variant={role && user.role.id === role.id ? 'default' : 'secondary'}
+                          className="text-xs"
+                        >
+                          {user.role.name}
+                        </Badge>
+                      )}
+                      {!user.role && (
+                        <span className="text-xs text-secondary-400">Sin rol</span>
                       )}
                     </label>
                   ))}

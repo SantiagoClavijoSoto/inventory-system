@@ -77,7 +77,7 @@ export interface BranchBranding {
 // Company and Subscription Types (Multi-tenant)
 export type CompanyPlan = 'free' | 'basic' | 'professional' | 'enterprise'
 export type SubscriptionStatus = 'trial' | 'active' | 'past_due' | 'cancelled' | 'suspended'
-export type BillingCycle = 'monthly' | 'quarterly' | 'annual'
+export type BillingCycle = 'monthly' | 'quarterly' | 'semiannual' | 'annual'
 
 export interface Subscription {
   id: number
@@ -200,6 +200,7 @@ export interface User {
   is_active: boolean
   is_platform_admin?: boolean
   can_create_roles?: boolean
+  must_change_password?: boolean
   created_at: string
   updated_at: string
   last_login?: string

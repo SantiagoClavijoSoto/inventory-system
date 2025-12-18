@@ -1,0 +1,25 @@
+[bandit]
+# Bandit Security Scanner Configuration
+# https://bandit.readthedocs.io/
+
+# Directories to exclude
+exclude_dirs = tests,migrations,venv,.venv,node_modules
+
+# Skip specific tests (if needed)
+# skips = B101,B601
+
+# Aggregate output by vulnerability type
+aggregate = vuln
+
+# Severity level threshold (low, medium, high)
+# Only report issues at or above this level
+severity = medium
+
+# Confidence level threshold (low, medium, high)
+confidence = medium
+
+# Output format (csv, custom, html, json, screen, txt, xml, yaml)
+format = screen
+
+# Show progress during scan
+progress = True

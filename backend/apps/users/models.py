@@ -243,6 +243,11 @@ class User(AbstractUser, TimestampMixin):
         verbose_name='Puede crear roles',
         help_text='Permite crear nuevos roles (solo editar si es False)'
     )
+    must_change_password = models.BooleanField(
+        default=False,
+        verbose_name='Debe cambiar contraseña',
+        help_text='Forzar cambio de contraseña en el próximo inicio de sesión'
+    )
 
     role = models.ForeignKey(
         Role,

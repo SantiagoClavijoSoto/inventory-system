@@ -41,7 +41,11 @@ import { extractErrorMessage } from '@/utils/errorSanitizer'
 function formatTime(dateString: string | null): string {
   if (!dateString) return '-'
   const date = new Date(dateString)
-  return date.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
+  return date.toLocaleTimeString('es-CO', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  })
 }
 
 function formatDate(dateString: string): string {
@@ -57,7 +61,10 @@ function formatHours(hours: number | string | null | undefined): string {
   if (hours === null || hours === undefined) return '-'
   const numHours = typeof hours === 'string' ? parseFloat(hours) : hours
   if (isNaN(numHours)) return '-'
-  return `${numHours.toFixed(1)}h`
+  const totalMinutes = Math.round(numHours * 60)
+  const h = Math.floor(totalMinutes / 60)
+  const m = totalMinutes % 60
+  return `${h}:${m.toString().padStart(2, '0')}`
 }
 
 function getWeekDateRange(): { dateFrom: string; dateTo: string } {
@@ -91,6 +98,7 @@ function CurrentShiftCard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['current-shift'] })
       queryClient.invalidateQueries({ queryKey: ['shifts'] })
+      queryClient.invalidateQueries({ queryKey: ['my-shifts'] })
       toast.success('Entrada registrada correctamente')
     },
     onError: (error) => {
@@ -103,6 +111,7 @@ function CurrentShiftCard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['current-shift'] })
       queryClient.invalidateQueries({ queryKey: ['shifts'] })
+      queryClient.invalidateQueries({ queryKey: ['my-shifts'] })
       toast.success('Salida registrada correctamente')
     },
     onError: (error) => {
@@ -115,6 +124,7 @@ function CurrentShiftCard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['current-shift'] })
       queryClient.invalidateQueries({ queryKey: ['shifts'] })
+      queryClient.invalidateQueries({ queryKey: ['my-shifts'] })
       toast.success('Salida a almuerzo registrada')
     },
     onError: (error) => {
@@ -127,6 +137,7 @@ function CurrentShiftCard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['current-shift'] })
       queryClient.invalidateQueries({ queryKey: ['shifts'] })
+      queryClient.invalidateQueries({ queryKey: ['my-shifts'] })
       toast.success('Regreso de almuerzo registrado')
     },
     onError: (error) => {
@@ -373,6 +384,32 @@ function EmployeesTodayTable({ branchId }: { branchId?: number }) {
     return <Badge variant={config.variant}>{config.label}</Badge>
   }
 
+  // Calculate worked hours excluding lunch break
+  const calculateWorkedHours = (shift: Shift): string => {
+    if (shift.clock_out) {
+      // Shift completed - use stored worked_hours (already excludes break)
+      return formatHours(shift.worked_hours)
+    }
+
+    // Calculate running hours for active shifts
+    const start = new Date(shift.clock_in)
+    const now = new Date()
+    let hours = (now.getTime() - start.getTime()) / 3600000
+
+    if (shift.break_start && !shift.break_end) {
+      // Currently on break - subtract time since break started
+      const breakStart = new Date(shift.break_start)
+      hours -= (now.getTime() - breakStart.getTime()) / 3600000
+    } else if (shift.break_start && shift.break_end) {
+      // Break completed - subtract break duration
+      const breakStart = new Date(shift.break_start)
+      const breakEnd = new Date(shift.break_end)
+      hours -= (breakEnd.getTime() - breakStart.getTime()) / 3600000
+    }
+
+    return formatHours(Math.max(0, hours))
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -398,7 +435,9 @@ function EmployeesTodayTable({ branchId }: { branchId?: number }) {
                   <TableHead>Empleado</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead>Entrada</TableHead>
-                  <TableHead>Almuerzo</TableHead>
+                  <TableHead>Sal. Almuerzo</TableHead>
+                  <TableHead>Reg. Almuerzo</TableHead>
+                  <TableHead>Salida</TableHead>
                   <TableHead className="text-right">Horas</TableHead>
                 </TableRow>
               </TableHeader>
@@ -410,37 +449,13 @@ function EmployeesTodayTable({ branchId }: { branchId?: number }) {
                     </TableCell>
                     <TableCell>{getStatusBadge(shift)}</TableCell>
                     <TableCell>{formatTime(shift.clock_in)}</TableCell>
-                    <TableCell>
-                      {shift.break_start ? (
-                        shift.break_end ? (
-                          <span className="text-green-600">✓</span>
-                        ) : (
-                          <span className="text-yellow-600">En curso</span>
-                        )
-                      ) : (
-                        '-'
-                      )}
-                    </TableCell>
+                    <TableCell>{formatTime(shift.break_start)}</TableCell>
+                    <TableCell>{formatTime(shift.break_end)}</TableCell>
+                    <TableCell>{formatTime(shift.clock_out)}</TableCell>
                     <TableCell className="text-right font-medium">
-                      {shift.clock_out ? formatHours(shift.worked_hours) : (
-                        <span className="text-secondary-400">
-                          {/* Calculate running hours */}
-                          {(() => {
-                            const start = new Date(shift.clock_in)
-                            const now = new Date()
-                            let hours = (now.getTime() - start.getTime()) / 3600000
-                            if (shift.break_start && !shift.break_end) {
-                              const breakStart = new Date(shift.break_start)
-                              hours -= (now.getTime() - breakStart.getTime()) / 3600000
-                            } else if (shift.break_start && shift.break_end) {
-                              const breakStart = new Date(shift.break_start)
-                              const breakEnd = new Date(shift.break_end)
-                              hours -= (breakEnd.getTime() - breakStart.getTime()) / 3600000
-                            }
-                            return formatHours(Math.max(0, hours))
-                          })()}
-                        </span>
-                      )}
+                      <span className={shift.clock_out ? '' : 'text-secondary-400'}>
+                        {calculateWorkedHours(shift)}
+                      </span>
                     </TableCell>
                   </TableRow>
                 ))}

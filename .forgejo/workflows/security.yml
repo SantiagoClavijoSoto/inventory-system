@@ -1,0 +1,161 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master]
+  schedule:
+    # Run weekly on Sundays at midnight
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+
+jobs:
+  security-scan:
+    name: Security Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install bandit safety pip-audit
+
+      - name: Run Bandit (SAST)
+        run: |
+          echo "=== Running Bandit Security Scanner ==="
+          bandit -r backend/ -f json -o bandit-report.json --severity-level medium || true
+          bandit -r backend/ -f txt --severity-level medium
+        continue-on-error: true
+
+      - name: Run Safety (Dependency Check)
+        run: |
+          echo "=== Checking Dependencies for Vulnerabilities ==="
+          cd backend
+          pip install -r requirements.txt
+          safety check --json > ../safety-report.json || true
+          safety check
+        continue-on-error: true
+
+      - name: Run pip-audit
+        run: |
+          echo "=== Running pip-audit ==="
+          cd backend
+          pip-audit --format json > ../pip-audit-report.json || true
+          pip-audit
+        continue-on-error: true
+
+      - name: Upload Security Reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-reports
+          path: |
+            bandit-report.json
+            safety-report.json
+            pip-audit-report.json
+          retention-days: 30
+
+      - name: Check for Critical Vulnerabilities
+        run: |
+          echo "=== Checking for Critical Issues ==="
+
+          # Check Bandit for high severity issues
+          if [ -f bandit-report.json ]; then
+            HIGH_COUNT=$(python -c "import json; data=json.load(open('bandit-report.json')); print(len([r for r in data.get('results', []) if r.get('issue_severity') == 'HIGH']))")
+            if [ "$HIGH_COUNT" -gt "0" ]; then
+              echo "::error::Found $HIGH_COUNT high severity issues in Bandit scan"
+              exit 1
+            fi
+          fi
+
+          echo "No critical vulnerabilities found"
+
+  django-security-check:
+    name: Django Security Check
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: test_db
+          MYSQL_ROOT_PASSWORD: testpass
+          MYSQL_USER: test_user
+          MYSQL_PASSWORD: testpass
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          cd backend
+          pip install -r requirements.txt
+
+      - name: Run Django Security Check
+        env:
+          DATABASE_URL: mysql://test_user:testpass@127.0.0.1:3306/test_db
+          SECRET_KEY: test-secret-key-for-ci-only
+          DEBUG: 'False'
+        run: |
+          cd backend
+          echo "=== Running Django Deployment Security Check ==="
+          python manage.py check --deploy --fail-level WARNING
+
+  code-quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install linters
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff black isort
+
+      - name: Run Ruff
+        run: |
+          echo "=== Running Ruff Linter ==="
+          ruff check backend/
+
+      - name: Check Black formatting
+        run: |
+          echo "=== Checking Black Formatting ==="
+          black --check backend/
+
+      - name: Check isort
+        run: |
+          echo "=== Checking Import Sorting ==="
+          isort --check-only backend/

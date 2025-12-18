@@ -13,6 +13,7 @@ def create_branch_stock_for_new_product(sender, instance, created, **kwargs):
     """
     Automatically create BranchStock records for all active branches
     in the same company when a new product is created.
+    Uses bulk_create for efficiency with multiple branches.
     """
     if created and instance.company_id:
         # Get all active branches for this company
@@ -22,13 +23,13 @@ def create_branch_stock_for_new_product(sender, instance, created, **kwargs):
             is_deleted=False
         )
 
-        # Create BranchStock for each branch
-        for branch in branches:
-            BranchStock.objects.get_or_create(
-                product=instance,
-                branch=branch,
-                defaults={'quantity': 0}
-            )
+        # Bulk create BranchStock for all branches at once
+        stocks_to_create = [
+            BranchStock(product=instance, branch=branch, quantity=0)
+            for branch in branches
+        ]
+        if stocks_to_create:
+            BranchStock.objects.bulk_create(stocks_to_create, ignore_conflicts=True)
 
 
 @receiver(post_save, sender=BranchStock)

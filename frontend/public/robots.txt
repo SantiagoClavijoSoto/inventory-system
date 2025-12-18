@@ -1,0 +1,4 @@
+# Inventory System - Admin Application
+# Block all search engine crawling as this is an internal admin app
+User-agent: *
+Disallow: /

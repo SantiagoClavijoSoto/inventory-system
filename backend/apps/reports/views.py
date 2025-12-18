@@ -467,6 +467,10 @@ class InventoryReportViewSet(TenantReportMixin, viewsets.ViewSet):
             target_date=target_date,
             branch_id=branch_id
         )
+        # Limit results to prevent huge responses
+        MAX_RESULTS = 1000
+        if isinstance(data, list) and len(data) > MAX_RESULTS:
+            data = data[:MAX_RESULTS]
         return Response(data)
 
     @extend_schema(
@@ -505,6 +509,10 @@ class InventoryReportViewSet(TenantReportMixin, viewsets.ViewSet):
             date_to=date_to,
             branch_id=branch_id
         )
+        # Limit results to prevent huge responses
+        MAX_RESULTS = 1000
+        if isinstance(data, list) and len(data) > MAX_RESULTS:
+            data = data[:MAX_RESULTS]
         return Response(data)
 
     @extend_schema(

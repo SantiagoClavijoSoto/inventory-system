@@ -188,6 +188,7 @@ class Subscription(TimestampMixin):
     BILLING_CYCLE_CHOICES = [
         ('monthly', 'Mensual'),
         ('quarterly', 'Trimestral'),
+        ('semiannual', 'Semestral'),
         ('annual', 'Anual'),
     ]
 

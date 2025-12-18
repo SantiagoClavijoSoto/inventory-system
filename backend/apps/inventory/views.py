@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
+from django.db import transaction
 from django.db.models import Sum, Q
 
 from apps.users.permissions import HasPermission, CanAccessBranch
@@ -304,6 +305,7 @@ class StockViewSet(viewsets.ViewSet):
         return [IsAuthenticated(), HasPermission('inventory:view')]
 
     @action(detail=False, methods=['post'])
+    @transaction.atomic
     def adjust(self, request):
         """Manual stock adjustment"""
         serializer = StockAdjustmentSerializer(data=request.data)
@@ -334,6 +336,7 @@ class StockViewSet(viewsets.ViewSet):
         )
 
     @action(detail=False, methods=['post'])
+    @transaction.atomic
     def transfer(self, request):
         """Transfer stock between branches"""
         serializer = StockTransferSerializer(data=request.data)

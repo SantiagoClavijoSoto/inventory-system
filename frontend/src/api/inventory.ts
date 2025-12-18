@@ -45,6 +45,30 @@ interface ProductFilters {
   branch?: number
 }
 
+interface LowStockItem {
+  product_id: number
+  product_name: string
+  product_sku: string
+  branch_id: number
+  branch_name: string
+  current_quantity: number
+  min_stock: number
+  is_out_of_stock: boolean
+}
+
+interface StockAlertCreate {
+  product_id?: number
+  category_id?: number
+  branch_id?: number
+  threshold_quantity: number
+  is_active?: boolean
+}
+
+interface StockAlertUpdate {
+  threshold_quantity?: number
+  is_active?: boolean
+}
+
 // Category API
 export const categoryApi = {
   getAll: async () => {
@@ -116,7 +140,7 @@ export const productApi = {
   },
 
   getLowStock: async (branchId?: number) => {
-    const response = await apiClient.get<any[]>('/products/low_stock/', {
+    const response = await apiClient.get<LowStockItem[]>('/products/low_stock/', {
       params: branchId ? { branch_id: branchId } : undefined,
     })
     return response.data
@@ -219,12 +243,12 @@ export const alertApi = {
     return response.data
   },
 
-  create: async (data: any) => {
+  create: async (data: StockAlertCreate) => {
     const response = await apiClient.post('/alerts/', data)
     return response.data
   },
 
-  update: async (id: number, data: any) => {
+  update: async (id: number, data: StockAlertUpdate) => {
     const response = await apiClient.patch(`/alerts/${id}/`, data)
     return response.data
   },

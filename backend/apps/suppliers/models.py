@@ -9,13 +9,10 @@ class Supplier(TimestampMixin, SoftDeleteMixin, models.Model):
     """
     Supplier/vendor information for products.
     """
-    # Multi-tenant: company association
-    # NOTE: nullable=True for initial migration, should be required in production
+    # Multi-tenant: company association (REQUIRED)
     company = models.ForeignKey(
         'companies.Company',
         on_delete=models.CASCADE,
-        null=True,
-        blank=True,
         related_name='suppliers',
         verbose_name='Empresa'
     )

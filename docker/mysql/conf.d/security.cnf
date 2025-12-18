@@ -1,0 +1,87 @@
+# ============================================================
+# MySQL Security Configuration
+# Inventory System - Production Hardening
+# ============================================================
+
+[mysqld]
+# ------------------------------------------------------------
+# NETWORK SECURITY
+# ------------------------------------------------------------
+# Bind to all interfaces (Docker handles network isolation)
+bind-address = 0.0.0.0
+
+# Disable symbolic links (security risk)
+symbolic-links = 0
+
+# Disable LOCAL INFILE (prevents file read attacks)
+local_infile = 0
+
+# ------------------------------------------------------------
+# AUTHENTICATION & ACCESS
+# ------------------------------------------------------------
+# Use strong password hashing
+default_authentication_plugin = caching_sha2_password
+
+# Lock accounts after failed login attempts (MySQL 8.0.19+)
+# Uncomment for production:
+# connection_control_failed_connections_threshold = 5
+# connection_control_min_connection_delay = 1000
+# connection_control_max_connection_delay = 86400000
+
+# ------------------------------------------------------------
+# SQL MODE (Strict)
+# ------------------------------------------------------------
+sql_mode = STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+
+# ------------------------------------------------------------
+# LOGGING & AUDIT
+# ------------------------------------------------------------
+# General query log (disable in production, enable for audit)
+general_log = 0
+general_log_file = /var/log/mysql/general.log
+
+# Slow query log (useful for performance and security)
+slow_query_log = 1
+slow_query_log_file = /var/log/mysql/slow.log
+long_query_time = 2
+
+# Error log
+log_error = /var/log/mysql/error.log
+log_error_verbosity = 2
+
+# ------------------------------------------------------------
+# SSL/TLS CONFIGURATION
+# ------------------------------------------------------------
+# Uncomment after generating certificates:
+# require_secure_transport = ON
+# ssl_ca = /etc/mysql/ssl/ca.pem
+# ssl_cert = /etc/mysql/ssl/server-cert.pem
+# ssl_key = /etc/mysql/ssl/server-key.pem
+# tls_version = TLSv1.2,TLSv1.3
+
+# ------------------------------------------------------------
+# PERFORMANCE & SECURITY LIMITS
+# ------------------------------------------------------------
+# Maximum connections
+max_connections = 150
+
+# Connection timeout
+wait_timeout = 600
+interactive_timeout = 600
+
+# Max allowed packet (prevent large injection payloads)
+max_allowed_packet = 64M
+
+# ------------------------------------------------------------
+# CHARACTER SET (Security + Compatibility)
+# ------------------------------------------------------------
+character_set_server = utf8mb4
+collation_server = utf8mb4_unicode_ci
+
+[mysql]
+# Disable auto-rehash for security
+no_auto_rehash
+
+[client]
+# Default character set for clients
+default_character_set = utf8mb4

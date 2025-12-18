@@ -56,19 +56,21 @@ export interface UserListParams {
 export interface CreateUserRequest {
   email: string
   password: string
+  password_confirm: string
   first_name: string
   last_name: string
-  role?: number
+  role_id?: number
   default_branch?: number
   allowed_branches?: number[]
   is_active?: boolean
+  company_id?: number  // For SuperAdmin to assign company
 }
 
 export interface UpdateUserRequest {
   email?: string
   first_name?: string
   last_name?: string
-  role?: number
+  role_id?: number | null
   default_branch?: number
   allowed_branches?: number[]
   is_active?: boolean

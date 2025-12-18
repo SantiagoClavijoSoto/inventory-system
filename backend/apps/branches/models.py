@@ -10,13 +10,10 @@ from core.mixins import AuditMixin, SoftDeleteMixin, ActiveManager
 class Branch(AuditMixin, SoftDeleteMixin):
     """Branch/Location model for multi-store support."""
 
-    # Multi-tenant: company association
-    # NOTE: nullable=True for initial migration, should be required in production
+    # Multi-tenant: company association (REQUIRED)
     company = models.ForeignKey(
         'companies.Company',
         on_delete=models.CASCADE,
-        null=True,
-        blank=True,
         related_name='branches',
         verbose_name='Empresa'
     )

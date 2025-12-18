@@ -114,6 +114,14 @@ class SaleViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
 
         branch = get_object_or_404(Branch, id=branch_id, is_active=True)
 
+        # Validar que el usuario tiene acceso a esta sucursal
+        if not request.user.is_superuser:
+            if not request.user.can_access_branch(branch.id):
+                return Response(
+                    {'error': 'No tienes acceso a esta sucursal'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
         try:
             sale = SaleService.create_sale(
                 branch=branch,
@@ -355,6 +363,14 @@ class CashRegisterViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
             )
 
         branch = get_object_or_404(Branch, id=branch_id, is_active=True)
+
+        # Validar que el usuario tiene acceso a esta sucursal
+        if not request.user.is_superuser:
+            if not request.user.can_access_branch(branch.id):
+                return Response(
+                    {'error': 'No tienes acceso a esta sucursal'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
 
         try:
             register = CashRegisterService.open_register(

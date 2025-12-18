@@ -2,11 +2,15 @@
 Views for user authentication and management.
 """
 from django.contrib.auth import update_session_auth_hash
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
+from django.db.models import Q
 from rest_framework import generics, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.throttling import AnonRateThrottle
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework_simplejwt.exceptions import TokenError
@@ -28,10 +32,16 @@ from .serializers import (
 from .permissions import HasPermission
 
 
+class LoginRateThrottle(AnonRateThrottle):
+    """Throttle for login attempts - 5 per minute."""
+    scope = 'login'
+
+
 @extend_schema(tags=['Autenticación'])
 class LoginView(APIView):
     """User login endpoint."""
     permission_classes = [AllowAny]
+    throttle_classes = [LoginRateThrottle]
     serializer_class = LoginSerializer
 
     @extend_schema(
@@ -119,7 +129,8 @@ class ChangePasswordView(APIView):
 
         user = request.user
         user.set_password(serializer.validated_data['new_password'])
-        user.save()
+        user.must_change_password = False  # Reset flag after password change
+        user.save(update_fields=['password', 'must_change_password'])
 
         # Update session to prevent logout
         update_session_auth_hash(request, user)
@@ -139,7 +150,7 @@ class UserViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
     """ViewSet for user management (admin only).
 
     Multi-tenant: Users are filtered by company automatically via TenantQuerySetMixin.
-    SuperAdmins can see all users across companies.
+    SuperAdmins can only see company administrators (not all users).
     """
     queryset = User.objects.select_related('role', 'company', 'default_branch').prefetch_related('allowed_branches')
     permission_classes = [IsAuthenticated, HasPermission]
@@ -149,6 +160,19 @@ class UserViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
     search_fields = ['email', 'first_name', 'last_name']
     ordering_fields = ['created_at', 'first_name', 'last_name']
     ordering = ['-created_at']
+
+    def get_queryset(self):
+        """Override to filter admins only for SuperAdmin."""
+        queryset = super().get_queryset()
+
+        # SuperAdmin only sees company administrators
+        if self.request.user.is_superuser:
+            queryset = queryset.filter(
+                Q(is_company_admin=True) | Q(role__role_type='admin'),
+                company__isnull=False  # Only users assigned to a company
+            )
+
+        return queryset
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -188,6 +212,16 @@ class UserViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
                 {'error': 'new_password es requerido.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        # Validar fortaleza de contraseña
+        try:
+            validate_password(new_password, user)
+        except ValidationError as e:
+            return Response(
+                {'error': list(e.messages)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         user.set_password(new_password)
         user.save()
         return Response({'message': f'Contraseña de {user.email} actualizada.'})
@@ -205,7 +239,8 @@ class RoleViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
     """ViewSet for role management.
 
     Multi-tenant: Roles are filtered by company automatically via TenantQuerySetMixin.
-    SuperAdmins can see all roles across companies.
+    SuperAdmins only see 'admin' type roles (to assign to company administrators).
+    Company admins see all roles for their company.
     """
     queryset = Role.objects.select_related('company').prefetch_related('permissions')
     serializer_class = RoleSerializer
@@ -215,6 +250,16 @@ class RoleViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
     filterset_fields = ['is_active', 'role_type']
     search_fields = ['name', 'description']
     ordering = ['name']
+
+    def get_queryset(self):
+        """Override to filter only admin roles for SuperAdmin."""
+        queryset = super().get_queryset()
+
+        # SuperAdmin only sees admin-type roles (for assigning to company admins)
+        if self.request.user.is_superuser:
+            queryset = queryset.filter(role_type='admin')
+
+        return queryset
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
@@ -233,6 +278,14 @@ class RoleViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
                     {'error': 'No tienes permiso para crear nuevos roles. Solo puedes editar roles existentes.'},
                     status=status.HTTP_403_FORBIDDEN
                 )
+
+        # SuperAdmin creates global admin roles (company=NULL, role_type='admin')
+        if user.is_superuser:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save(role_type='admin', company=None)
+            headers = self.get_success_headers(serializer.data)
+            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
         return super().create(request, *args, **kwargs)
 

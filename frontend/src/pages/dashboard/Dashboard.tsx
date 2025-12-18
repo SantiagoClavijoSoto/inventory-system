@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
+import { Helmet } from 'react-helmet-async'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { useAuthStore, useIsPlatformAdmin } from '@/store/authStore'
 import { alertsApi, type Alert, PLATFORM_ALERT_TYPES } from '@/api/alerts'
@@ -341,14 +342,18 @@ export function Dashboard() {
     ]
 
     return (
-      <div className="space-y-6">
-        {/* Welcome Header */}
-        <div>
-          <h1 className="text-2xl font-bold text-secondary-900">
-            Panel de Administrador
-          </h1>
-          <p className="text-secondary-500">
-            Gestión de la plataforma •{' '}
+      <>
+        <Helmet>
+          <title>Panel de Administrador | Sistema de Inventario</title>
+        </Helmet>
+        <div className="space-y-6">
+          {/* Welcome Header */}
+          <div>
+            <h1 className="text-2xl font-bold text-secondary-900">
+              Panel de Administrador
+            </h1>
+            <p className="text-secondary-500">
+              Gestión de la plataforma •{' '}
             {new Date().toLocaleDateString('es-ES', {
               weekday: 'long',
               year: 'numeric',
@@ -723,15 +728,20 @@ export function Dashboard() {
             </CardContent>
           </Card>
         </div>
-      </div>
+        </div>
+      </>
     )
   }
 
   // Company Admin Dashboard (original)
   return (
-    <div className="space-y-6">
-      {/* Welcome Header */}
-      <div>
+    <>
+      <Helmet>
+        <title>Dashboard | Sistema de Inventario</title>
+      </Helmet>
+      <div className="space-y-6">
+        {/* Welcome Header */}
+        <div>
         <h1 className="text-2xl font-bold text-secondary-900">
           ¡Bienvenido, {user?.first_name}!
         </h1>
@@ -1072,5 +1082,6 @@ export function Dashboard() {
         </div>
       )}
     </div>
+    </>
   )
 }

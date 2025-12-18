@@ -5,6 +5,7 @@ import type { CompanyPlan, SubscriptionStatus } from '@/types'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Badge } from '@/components/ui/Badge'
+import { formatCurrency } from '@/utils/formatters'
 import {
   Search,
   CreditCard,
@@ -90,14 +91,6 @@ export function Subscriptions() {
       month: 'short',
       day: 'numeric',
     })
-  }
-
-  const formatCurrency = (amount: number, currency: string = 'COP') => {
-    const formatted = new Intl.NumberFormat('es-CO', {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount)
-    return `${currency} ${formatted}`
   }
 
   const getDaysUntilPayment = (dateString?: string) => {

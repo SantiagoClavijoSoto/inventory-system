@@ -54,6 +54,7 @@ export interface UpdateCompanyRequest {
   max_users?: number
   max_products?: number
   is_active?: boolean
+  subscription_status?: 'trial' | 'active' | 'past_due' | 'cancelled' | 'suspended'
 }
 
 export interface CompanySimple {

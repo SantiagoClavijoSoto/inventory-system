@@ -73,3 +73,13 @@ Thumbs.db
 # Nix
 result/
 result-*
+
+# Security
+*.pem
+*.key
+*.crt
+*.csr
+.env.prod
+backend/logs/
+docker/mysql/ssl/
+docker/nginx/ssl/

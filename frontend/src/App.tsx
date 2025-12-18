@@ -3,6 +3,7 @@ import { RouterProvider } from 'react-router-dom'
 import { router } from './router'
 import { useAuthStore } from './store/authStore'
 import { ThemeProvider } from './providers/ThemeProvider'
+import { ErrorBoundary } from './components/ErrorBoundary'
 
 function App() {
   const checkAuth = useAuthStore((state) => state.checkAuth)
@@ -17,9 +18,11 @@ function App() {
   }, [checkAuth])
 
   return (
-    <ThemeProvider>
-      <RouterProvider router={router} />
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <RouterProvider router={router} />
+      </ThemeProvider>
+    </ErrorBoundary>
   )
 }
 

@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/store/authStore'
 import { employeesApi } from '@/api/employees'
 import { branchesApi } from '@/api/branches'
+import { usersApi, type User as AdminUser } from '@/api/users'
 import {
   Card,
   CardContent,
@@ -35,10 +36,12 @@ import {
   Calendar,
   Phone,
   Building2,
+  Shield,
+  Mail,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { extractErrorMessage } from '@/utils/errorSanitizer'
-import type { Employee, CreateEmployeeRequest, UpdateEmployeeRequest } from '@/types'
+import type { Employee, CreateEmployeeRequest, UpdateEmployeeRequest, EmploymentType, EmployeeStatus } from '@/types'
 
 const EMPLOYMENT_TYPE_OPTIONS = [
   { value: 'full_time', label: 'Tiempo completo' },
@@ -55,8 +58,22 @@ const STATUS_OPTIONS = [
 ]
 
 export function Employees() {
+  const user = useAuthStore((state) => state.user)
+
+  // Check if user is a company admin (shows users view instead of employees)
+  const isCompanyAdmin = user?.is_platform_admin === false && user?.role?.role_type === 'admin'
+
+  // If company admin, render the admin users view
+  if (isCompanyAdmin) {
+    return <AdminUsersView />
+  }
+
+  return <EmployeesView />
+}
+
+// View for regular users - shows employees
+function EmployeesView() {
   const queryClient = useQueryClient()
-  useAuthStore()
 
   // State
   const [search, setSearch] = useState('')
@@ -524,8 +541,8 @@ function EmployeeFormModal({ isOpen, onClose, employee, branches }: EmployeeForm
         branch: Number(formData.branch_id),
         position: formData.position,
         department: formData.department || undefined,
-        employment_type: formData.employment_type as any,
-        status: formData.status as any,
+        employment_type: formData.employment_type as EmploymentType,
+        status: formData.status as EmployeeStatus,
         salary: formData.salary ? Number(formData.salary) : undefined,
         hourly_rate: formData.hourly_rate ? Number(formData.hourly_rate) : undefined,
         emergency_contact_name: formData.emergency_contact_name || undefined,
@@ -546,7 +563,7 @@ function EmployeeFormModal({ isOpen, onClose, employee, branches }: EmployeeForm
         branch_id: Number(formData.branch_id),
         position: formData.position,
         department: formData.department || undefined,
-        employment_type: formData.employment_type as any,
+        employment_type: formData.employment_type as EmploymentType,
         hire_date: formData.hire_date,
         salary: formData.salary ? Number(formData.salary) : undefined,
         hourly_rate: formData.hourly_rate ? Number(formData.hourly_rate) : undefined,
@@ -771,5 +788,220 @@ function EmployeeFormModal({ isOpen, onClose, employee, branches }: EmployeeForm
         </ModalFooter>
       </form>
     </Modal>
+  )
+}
+
+// View for company admins - shows users assigned to their company
+function AdminUsersView() {
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<string>('')
+  const [page, setPage] = useState(1)
+
+  // Query users
+  const { data: usersData, isLoading } = useQuery({
+    queryKey: ['admin-users', { search, is_active: statusFilter, page }],
+    queryFn: () =>
+      usersApi.getAll({
+        search: search || undefined,
+        is_active: statusFilter === '' ? undefined : statusFilter === 'true',
+        page,
+        page_size: 20,
+      }),
+  })
+
+  const getStatusBadge = (isActive: boolean) => {
+    return isActive ? (
+      <Badge variant="success">Activo</Badge>
+    ) : (
+      <Badge variant="secondary">Inactivo</Badge>
+    )
+  }
+
+  const getRoleBadge = (user: AdminUser) => {
+    if (user.is_company_admin) {
+      return <Badge variant="primary">Admin</Badge>
+    }
+    if (user.role) {
+      const roleColors: Record<string, 'success' | 'warning' | 'secondary'> = {
+        admin: 'success',
+        supervisor: 'warning',
+        cashier: 'secondary',
+        warehouse: 'secondary',
+        viewer: 'secondary',
+      }
+      return (
+        <Badge variant={roleColors[user.role.role_type] || 'secondary'}>
+          {user.role.name}
+        </Badge>
+      )
+    }
+    return <Badge variant="secondary">Sin rol</Badge>
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-secondary-900">Usuarios</h1>
+          <p className="text-secondary-500">
+            Usuarios asignados a tu empresa
+          </p>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex flex-wrap gap-4">
+            <div className="flex-1 min-w-[200px]">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar por nombre o email..."
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value)
+                    setPage(1)
+                  }}
+                  className="w-full pl-10 pr-4 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+            </div>
+
+            <Select
+              options={[
+                { value: '', label: 'Todos los estados' },
+                { value: 'true', label: 'Activos' },
+                { value: 'false', label: 'Inactivos' },
+              ]}
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value)
+                setPage(1)
+              }}
+              className="w-40"
+            />
+
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setSearch('')
+                setStatusFilter('')
+                setPage(1)
+              }}
+            >
+              <RefreshCw className="w-4 h-4" />
+              Limpiar
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Users Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            {usersData?.count || 0} usuarios encontrados
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {isLoading ? (
+            <div className="flex items-center justify-center h-64">
+              <Spinner size="lg" />
+            </div>
+          ) : usersData?.results.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 text-secondary-500">
+              <Users className="w-12 h-12 mb-4 text-secondary-300" />
+              <p className="text-lg font-medium">No se encontraron usuarios</p>
+              <p className="text-sm">Intenta ajustar los filtros de búsqueda</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Usuario</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Rol</TableHead>
+                  <TableHead>Sucursal</TableHead>
+                  <TableHead>Estado</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {usersData?.results.map((user) => (
+                  <TableRow key={user.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
+                          <span className="text-sm text-primary-700 font-medium">
+                            {user.first_name?.[0]}
+                            {user.last_name?.[0]}
+                          </span>
+                        </div>
+                        <div>
+                          <p className="font-medium text-secondary-900">{user.full_name}</p>
+                          {user.is_company_admin && (
+                            <div className="flex items-center gap-1 text-xs text-primary-600">
+                              <Shield className="w-3 h-3" />
+                              Administrador
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1.5">
+                        <Mail className="w-3.5 h-3.5 text-secondary-400" />
+                        <span>{user.email}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>{getRoleBadge(user)}</TableCell>
+                    <TableCell>
+                      {user.default_branch_name ? (
+                        <div className="flex items-center gap-1.5">
+                          <Building2 className="w-3.5 h-3.5 text-secondary-400" />
+                          <span>{user.default_branch_name}</span>
+                        </div>
+                      ) : (
+                        <span className="text-secondary-400 text-sm">Sin asignar</span>
+                      )}
+                    </TableCell>
+                    <TableCell>{getStatusBadge(user.is_active)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+
+        {/* Pagination */}
+        {usersData && usersData.count > 20 && (
+          <div className="flex items-center justify-between px-6 py-4 border-t border-secondary-200">
+            <p className="text-sm text-secondary-500">
+              Página {page} de {Math.ceil(usersData.count / 20)}
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={!usersData.previous}
+                onClick={() => setPage(page - 1)}
+              >
+                Anterior
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={!usersData.next}
+                onClick={() => setPage(page + 1)}
+              >
+                Siguiente
+              </Button>
+            </div>
+          </div>
+        )}
+      </Card>
+    </div>
   )
 }
