@@ -8,6 +8,7 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 
 from .models import Company, Subscription
+from apps.branches.models import Branch
 
 
 # Plan pricing (monthly base)
@@ -77,4 +78,19 @@ def create_subscription_for_company(sender, instance, created, **kwargs):
                 next_payment_date=next_payment,
                 amount=calculate_subscription_amount(instance.plan, billing_cycle),
                 currency='COP',
+            )
+
+        # Create main branch for the company if it doesn't have any
+        if not Branch.objects.filter(company=instance).exists():
+            # Generate branch code from company slug
+            branch_code = instance.slug[:3].upper() + '-MAIN'
+            Branch.objects.create(
+                company=instance,
+                name='Sucursal Principal',
+                code=branch_code,
+                is_main=True,
+                is_active=True,
+                email=instance.email,
+                phone=instance.phone,
+                address=instance.address or '',
             )

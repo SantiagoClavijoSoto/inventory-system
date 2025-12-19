@@ -620,3 +620,202 @@ class BranchReportViewSet(TenantReportMixin, viewsets.ViewSet):
             date_to=serializer.validated_data['date_to']
         )
         return Response(data)
+
+
+# =============================================================================
+# USER REPORTS VIEWSET
+# =============================================================================
+
+from core.mixins import TenantQuerySetMixin
+from .models import UserReport
+from .serializers import (
+    UserReportSerializer,
+    UserReportListSerializer,
+    UserReportCreateSerializer,
+    UserReportFilterSerializer,
+    StatusChangeSerializer,
+)
+
+
+class UserReportViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
+    """
+    ViewSet for user-written reports.
+
+    Permission logic:
+    - Regular users: Can only see their OWN reports
+    - Regular users: Can create Inventario, Sucursales (NOT Empleados)
+    - Admins: Can see ALL reports in their company
+    - Admins: Can create ALL categories including Empleados
+    - Admins: Can assign Empleados reports to employees
+    - Admins: Can change status (set in review, resolve)
+    """
+    permission_classes = [IsAuthenticated]
+    queryset = UserReport.objects.all()
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return UserReportListSerializer
+        if self.action == 'create':
+            return UserReportCreateSerializer
+        return UserReportSerializer
+
+    def _is_admin(self, user):
+        """Check if user is admin."""
+        return user.is_superuser or (
+            user.role and user.role.role_type == 'admin'
+        )
+
+    def get_queryset(self):
+        from django.db.models import Q
+
+        queryset = super().get_queryset()
+        user = self.request.user
+
+        # Regular users see:
+        # 1. Reports they created
+        # 2. 'empleados' reports assigned to all employees
+        # 3. 'empleados' reports specifically assigned to them (with assign_to_all=False)
+        if not self._is_admin(user):
+            user_filter = Q(created_by=user)
+
+            # Check if user has employee profile
+            employee_profile = getattr(user, 'employee_profile', None)
+            if employee_profile:
+                # Reports assigned to all employees
+                user_filter |= Q(category='empleados', assign_to_all=True)
+                # Reports specifically assigned to this employee (MUST have assign_to_all=False)
+                user_filter |= Q(
+                    category='empleados',
+                    assign_to_all=False,
+                    assigned_employees=employee_profile
+                )
+
+            queryset = queryset.filter(user_filter).distinct()
+
+        return queryset.select_related(
+            'created_by', 'reviewed_by', 'resolved_by'
+        ).prefetch_related('assigned_employees')
+
+    @extend_schema(
+        summary="List user reports",
+        parameters=[
+            OpenApiParameter('category', OpenApiTypes.STR, OpenApiParameter.QUERY, required=False),
+            OpenApiParameter('status', OpenApiTypes.STR, OpenApiParameter.QUERY, required=False),
+            OpenApiParameter('priority', OpenApiTypes.STR, OpenApiParameter.QUERY, required=False),
+            OpenApiParameter('mine_only', OpenApiTypes.BOOL, OpenApiParameter.QUERY, required=False),
+        ],
+        responses={200: UserReportListSerializer(many=True)}
+    )
+    def list(self, request):
+        """List reports with filtering."""
+        serializer = UserReportFilterSerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+
+        queryset = self.get_queryset()
+
+        # Filter to only show reports created by current user
+        if serializer.validated_data.get('mine_only'):
+            queryset = queryset.filter(created_by=request.user)
+
+        # Apply filters
+        if serializer.validated_data.get('category'):
+            queryset = queryset.filter(category=serializer.validated_data['category'])
+        if serializer.validated_data.get('status'):
+            queryset = queryset.filter(status=serializer.validated_data['status'])
+        if serializer.validated_data.get('priority'):
+            queryset = queryset.filter(priority=serializer.validated_data['priority'])
+
+        output_serializer = UserReportListSerializer(queryset[:100], many=True)
+        return Response(output_serializer.data)
+
+    def perform_create(self, serializer):
+        """Auto-assign company and created_by on create."""
+        serializer.save(
+            company=self.request.user.company,
+            created_by=self.request.user
+        )
+
+    def _can_change_status(self, user, report):
+        """Check if user can change the status of a report."""
+        # Admins can always change status
+        if self._is_admin(user):
+            return True
+
+        # Assigned employees can change status of reports assigned to them
+        employee_profile = getattr(user, 'employee_profile', None)
+        if employee_profile and report.category == 'empleados':
+            if report.assign_to_all:
+                return True
+            if report.assigned_employees.filter(id=employee_profile.id).exists():
+                return True
+
+        return False
+
+    @extend_schema(
+        summary="Set report to 'En revision'",
+        responses={200: UserReportSerializer}
+    )
+    @action(detail=True, methods=['post'], url_path='set-in-review')
+    def set_in_review(self, request, pk=None):
+        """Move report to 'en_revision' status."""
+        report = self.get_object()
+
+        # Check permission: admin or assigned employee
+        if not self._can_change_status(request.user, report):
+            return Response(
+                {'error': 'No tiene permiso para cambiar el estado de este reporte'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        report.set_in_review(request.user)
+        serializer = UserReportSerializer(report)
+        return Response(serializer.data)
+
+    @extend_schema(
+        summary="Resolve report",
+        request=StatusChangeSerializer,
+        responses={200: UserReportSerializer}
+    )
+    @action(detail=True, methods=['post'], url_path='resolve')
+    def resolve(self, request, pk=None):
+        """Mark report as resolved."""
+        report = self.get_object()
+
+        # Check permission: admin or assigned employee
+        if not self._can_change_status(request.user, report):
+            return Response(
+                {'error': 'No tiene permiso para resolver este reporte'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        serializer = StatusChangeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        report.resolve(request.user, serializer.validated_data.get('notes', ''))
+        output_serializer = UserReportSerializer(report)
+        return Response(output_serializer.data)
+
+    @extend_schema(
+        summary="Get report counts by status",
+        responses={200: {'type': 'object'}}
+    )
+    @action(detail=False, methods=['get'], url_path='counts')
+    def counts(self, request):
+        """Get report counts by status and category for current user."""
+        queryset = self.get_queryset()
+
+        counts = {
+            'total': queryset.count(),
+            'by_status': {
+                'pendiente': queryset.filter(status='pendiente').count(),
+                'en_revision': queryset.filter(status='en_revision').count(),
+                'resuelto': queryset.filter(status='resuelto').count(),
+            },
+            'by_category': {
+                'inventario': queryset.filter(category='inventario').count(),
+                'empleados': queryset.filter(category='empleados').count(),
+                'sucursales': queryset.filter(category='sucursales').count(),
+            },
+        }
+
+        return Response(counts)

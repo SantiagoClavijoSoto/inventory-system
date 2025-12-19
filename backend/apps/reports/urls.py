@@ -9,7 +9,8 @@ from .views import (
     SalesReportViewSet,
     InventoryReportViewSet,
     EmployeeReportViewSet,
-    BranchReportViewSet
+    BranchReportViewSet,
+    UserReportViewSet
 )
 
 router = DefaultRouter()
@@ -18,6 +19,7 @@ router.register(r'sales', SalesReportViewSet, basename='sales-report')
 router.register(r'inventory', InventoryReportViewSet, basename='inventory-report')
 router.register(r'employees', EmployeeReportViewSet, basename='employee-report')
 router.register(r'branches', BranchReportViewSet, basename='branch-report')
+router.register(r'user-reports', UserReportViewSet, basename='user-report')
 
 urlpatterns = [
     path('', include(router.urls)),

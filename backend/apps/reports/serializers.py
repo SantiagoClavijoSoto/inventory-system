@@ -4,6 +4,9 @@ Serializers for report parameters and responses.
 from rest_framework import serializers
 from datetime import date, timedelta
 
+from .models import UserReport
+from apps.employees.models import Employee
+
 
 class DateRangeSerializer(serializers.Serializer):
     """
@@ -165,3 +168,200 @@ class StockSummaryResponseSerializer(serializers.Serializer):
     potential_profit = serializers.DecimalField(max_digits=14, decimal_places=2)
     low_stock_count = serializers.IntegerField()
     out_of_stock_count = serializers.IntegerField()
+
+
+# =============================================================================
+# USER REPORT SERIALIZERS
+# =============================================================================
+
+class UserReportSerializer(serializers.ModelSerializer):
+    """Full serializer for UserReport model."""
+    category_display = serializers.CharField(
+        source='get_category_display',
+        read_only=True
+    )
+    status_display = serializers.CharField(
+        source='get_status_display',
+        read_only=True
+    )
+    priority_display = serializers.CharField(
+        source='get_priority_display',
+        read_only=True
+    )
+    created_by_name = serializers.CharField(
+        source='created_by.get_full_name',
+        read_only=True
+    )
+    reviewed_by_name = serializers.SerializerMethodField()
+    resolved_by_name = serializers.SerializerMethodField()
+    assigned_employee_names = serializers.SerializerMethodField()
+    can_change_status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UserReport
+        fields = [
+            'id',
+            'title',
+            'description',
+            'category',
+            'category_display',
+            'priority',
+            'priority_display',
+            'status',
+            'status_display',
+            'created_by',
+            'created_by_name',
+            'assign_to_all',
+            'assigned_employees',
+            'assigned_employee_names',
+            'reviewed_at',
+            'reviewed_by',
+            'reviewed_by_name',
+            'resolved_at',
+            'resolved_by',
+            'resolved_by_name',
+            'resolution_notes',
+            'can_change_status',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = [
+            'id', 'created_by', 'reviewed_at', 'reviewed_by',
+            'resolved_at', 'resolved_by', 'created_at', 'updated_at'
+        ]
+
+    def get_reviewed_by_name(self, obj):
+        if obj.reviewed_by:
+            return obj.reviewed_by.get_full_name()
+        return None
+
+    def get_resolved_by_name(self, obj):
+        if obj.resolved_by:
+            return obj.resolved_by.get_full_name()
+        return None
+
+    def get_assigned_employee_names(self, obj):
+        if obj.assign_to_all:
+            return ['Todos los empleados']
+        employees = obj.assigned_employees.all()
+        return [emp.full_name for emp in employees]
+
+    def get_can_change_status(self, obj):
+        """Check if current user can change the status of this report."""
+        request = self.context.get('request')
+        if not request or not request.user:
+            return False
+
+        user = request.user
+
+        # Already resolved - no one can change
+        if obj.status == 'resuelto':
+            return False
+
+        # Admins can always change status
+        is_admin = user.is_superuser or (
+            user.role and user.role.role_type == 'admin'
+        ) or getattr(user, 'is_platform_admin', False)
+
+        if is_admin:
+            return True
+
+        # Assigned employees can change status of reports assigned to them
+        employee_profile = getattr(user, 'employee_profile', None)
+        if employee_profile and obj.category == 'empleados':
+            if obj.assign_to_all:
+                return True
+            if obj.assigned_employees.filter(id=employee_profile.id).exists():
+                return True
+
+        return False
+
+
+class UserReportListSerializer(serializers.ModelSerializer):
+    """Compact serializer for report lists."""
+    category_display = serializers.CharField(source='get_category_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    priority_display = serializers.CharField(source='get_priority_display', read_only=True)
+    created_by_name = serializers.CharField(source='created_by.get_full_name', read_only=True)
+
+    class Meta:
+        model = UserReport
+        fields = [
+            'id', 'title', 'category', 'category_display',
+            'priority', 'priority_display', 'status', 'status_display',
+            'created_by_name', 'created_at',
+        ]
+
+
+class UserReportCreateSerializer(serializers.ModelSerializer):
+    """Serializer for creating reports."""
+    assigned_employees = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=Employee.objects.all(),
+        required=False
+    )
+
+    class Meta:
+        model = UserReport
+        fields = [
+            'title', 'description', 'category', 'priority',
+            'assign_to_all', 'assigned_employees'
+        ]
+
+    def validate_category(self, value):
+        """Validate category based on user permissions."""
+        request = self.context.get('request')
+        if not request:
+            return value
+
+        user = request.user
+        is_admin = user.is_superuser or (
+            user.role and user.role.role_type == 'admin'
+        )
+
+        # Regular users cannot create 'empleados' reports
+        if value == 'empleados' and not is_admin:
+            raise serializers.ValidationError(
+                "No tiene permiso para crear reportes de empleados."
+            )
+        return value
+
+    def validate(self, attrs):
+        """Validate assignment fields."""
+        category = attrs.get('category')
+        assign_to_all = attrs.get('assign_to_all', False)
+        assigned_employees = attrs.get('assigned_employees', [])
+
+        # Assignment only valid for 'empleados' category
+        if category != 'empleados':
+            attrs['assign_to_all'] = False
+            attrs['assigned_employees'] = []
+        else:
+            # If specific employees are assigned, force assign_to_all=False
+            # This ensures mutual exclusivity between the two assignment modes
+            if assigned_employees:
+                attrs['assign_to_all'] = False
+
+        return attrs
+
+
+class UserReportFilterSerializer(serializers.Serializer):
+    """Serializer for filtering reports."""
+    category = serializers.ChoiceField(
+        choices=UserReport.CATEGORY_CHOICES,
+        required=False
+    )
+    status = serializers.ChoiceField(
+        choices=UserReport.STATUS_CHOICES,
+        required=False
+    )
+    priority = serializers.ChoiceField(
+        choices=UserReport.PRIORITY_CHOICES,
+        required=False
+    )
+    mine_only = serializers.BooleanField(required=False, default=False)
+
+
+class StatusChangeSerializer(serializers.Serializer):
+    """Serializer for status change actions."""
+    notes = serializers.CharField(required=False, allow_blank=True, default='')
