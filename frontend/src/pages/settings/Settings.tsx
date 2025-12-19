@@ -710,6 +710,12 @@ function UserFormModal({
     default_branch: undefined,
     is_active: true,
     company_id: undefined,
+    // Employee fields
+    is_employee: false,
+    employee_position: '',
+    employee_branch_id: undefined,
+    employment_type: 'full_time',
+    hire_date: new Date().toISOString().split('T')[0],
   })
 
   // Reset form when modal opens
@@ -719,11 +725,18 @@ function UserFormModal({
         setFormData({
           email: user.email,
           password: '',
+          password_confirm: '',
           first_name: user.first_name,
           last_name: user.last_name,
           default_branch: user.default_branch || undefined,
           is_active: user.is_active,
           company_id: user.company_id || undefined,
+          // Employee fields not editable on update
+          is_employee: false,
+          employee_position: '',
+          employee_branch_id: undefined,
+          employment_type: 'full_time',
+          hire_date: new Date().toISOString().split('T')[0],
         })
       } else {
         setFormData({
@@ -735,6 +748,12 @@ function UserFormModal({
           default_branch: undefined,
           is_active: true,
           company_id: undefined,
+          // Employee fields
+          is_employee: false,
+          employee_position: '',
+          employee_branch_id: undefined,
+          employment_type: 'full_time',
+          hire_date: new Date().toISOString().split('T')[0],
         })
       }
     }
@@ -786,8 +805,21 @@ function UserFormModal({
       return
     }
 
+    // Validate employee fields if is_employee is checked
+    if (!user && formData.is_employee) {
+      if (!formData.employee_position?.trim()) {
+        toast.error('El puesto es requerido para empleados')
+        return
+      }
+      // Branch is only required if there are branches available
+      if (!formData.employee_branch_id && branches.length > 0) {
+        toast.error('La sucursal es requerida para empleados')
+        return
+      }
+    }
+
     if (user) {
-      const { password, password_confirm, company_id, ...updateData } = formData
+      const { password, password_confirm, company_id, is_employee, employee_position, employee_branch_id, employment_type, hire_date, ...updateData } = formData
       updateMutation.mutate({ id: user.id, data: updateData })
     } else {
       createMutation.mutate({
@@ -799,6 +831,12 @@ function UserFormModal({
         default_branch: formData.default_branch,
         is_active: formData.is_active,
         company_id: formData.company_id,
+        // Employee fields
+        is_employee: formData.is_employee,
+        employee_position: formData.is_employee ? formData.employee_position : undefined,
+        employee_branch_id: formData.is_employee ? formData.employee_branch_id : undefined,
+        employment_type: formData.is_employee ? formData.employment_type : undefined,
+        hire_date: formData.is_employee ? formData.hire_date : undefined,
       })
     }
   }
@@ -899,6 +937,86 @@ function UserFormModal({
             />
             <span className="text-sm text-secondary-700">Usuario activo</span>
           </label>
+
+          {/* Employee Section - Only shown when creating */}
+          {!user && (
+            <div className="border-t border-secondary-200 pt-4 mt-4">
+              <label className="flex items-center gap-3 mb-4">
+                <input
+                  type="checkbox"
+                  checked={formData.is_employee}
+                  onChange={(e) => setFormData({ ...formData, is_employee: e.target.checked })}
+                  className="rounded border-secondary-300"
+                />
+                <span className="text-sm font-medium text-secondary-700">Es empleado</span>
+                <span className="text-xs text-secondary-500">(Crea perfil de empleado para control de turnos)</span>
+              </label>
+
+              {formData.is_employee && (
+                <div className="space-y-4 pl-6 border-l-2 border-primary-200">
+                  <Input
+                    label="Puesto *"
+                    value={formData.employee_position || ''}
+                    onChange={(e) => setFormData({ ...formData, employee_position: e.target.value })}
+                    placeholder="Ej: Cajero, Vendedor, Gerente..."
+                    required={formData.is_employee}
+                  />
+                  <div>
+                    <label className="block text-sm font-medium text-secondary-700 mb-2">
+                      Sucursal del empleado {branches.length > 0 ? '*' : '(opcional)'}
+                    </label>
+                    {branches.length > 0 ? (
+                      <Select
+                        options={[
+                          { value: '', label: 'Seleccionar sucursal...' },
+                          ...branches.map((branch) => ({ value: branch.id, label: branch.name })),
+                        ]}
+                        value={formData.employee_branch_id || ''}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            employee_branch_id: e.target.value ? Number(e.target.value) : undefined,
+                          })
+                        }
+                      />
+                    ) : (
+                      <p className="text-sm text-secondary-500 italic py-2">
+                        No hay sucursales disponibles. Se asignará cuando se cree una.
+                      </p>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-secondary-700 mb-2">
+                        Tipo de empleo
+                      </label>
+                      <Select
+                        options={[
+                          { value: 'full_time', label: 'Tiempo completo' },
+                          { value: 'part_time', label: 'Medio tiempo' },
+                          { value: 'contract', label: 'Por contrato' },
+                          { value: 'temporary', label: 'Temporal' },
+                        ]}
+                        value={formData.employment_type || 'full_time'}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            employment_type: e.target.value as 'full_time' | 'part_time' | 'contract' | 'temporary',
+                          })
+                        }
+                      />
+                    </div>
+                    <Input
+                      label="Fecha de contratación"
+                      type="date"
+                      value={formData.hire_date || ''}
+                      onChange={(e) => setFormData({ ...formData, hire_date: e.target.value })}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <ModalFooter>
           <Button type="button" variant="outline" onClick={onClose}>
@@ -1069,11 +1187,11 @@ function RolesSettings() {
                 <div className="flex justify-between items-start">
                   <div>
                     <CardTitle className="text-lg">{role.name}</CardTitle>
-                    <Badge variant={role.role_type === 'system' ? 'secondary' : 'primary'}>
-                      {role.role_type === 'system' ? 'Sistema' : 'Personalizado'}
+                    <Badge variant={role.company === null ? 'secondary' : 'primary'}>
+                      {role.company === null ? 'Sistema' : 'Personalizado'}
                     </Badge>
                   </div>
-                  {role.role_type !== 'system' && (
+                  {role.company !== null && (
                     <div className="flex gap-1">
                       <Button
                         variant="outline"

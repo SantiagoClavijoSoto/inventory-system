@@ -1,12 +1,15 @@
 """
 Serializers for user authentication and management.
 """
+from datetime import date
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import User, Role, Permission
 from apps.companies.models import Company
+from apps.employees.models import Employee
+from apps.branches.models import Branch
 
 
 class PermissionSerializer(serializers.ModelSerializer):
@@ -104,6 +107,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
 
     SuperAdmin can specify company_id to assign the user to a company.
     Regular admins create users within their own company (handled by mixin).
+    Optionally creates an Employee profile if is_employee=True.
     """
     password = serializers.CharField(
         write_only=True,
@@ -129,6 +133,37 @@ class UserCreateSerializer(serializers.ModelSerializer):
         required=False,
         help_text='Company ID (only for SuperAdmin)'
     )
+    # Employee fields (optional)
+    is_employee = serializers.BooleanField(
+        write_only=True,
+        required=False,
+        default=False,
+        help_text='Si es True, crea un perfil de empleado asociado'
+    )
+    employee_position = serializers.CharField(
+        write_only=True,
+        required=False,
+        max_length=100,
+        help_text='Puesto del empleado (requerido si is_employee=True)'
+    )
+    employee_branch_id = serializers.PrimaryKeyRelatedField(
+        queryset=Branch.objects.filter(is_active=True),
+        write_only=True,
+        required=False,
+        help_text='Sucursal del empleado (requerido si is_employee=True)'
+    )
+    employment_type = serializers.ChoiceField(
+        choices=Employee.EMPLOYMENT_TYPE_CHOICES,
+        write_only=True,
+        required=False,
+        default='full_time',
+        help_text='Tipo de empleo'
+    )
+    hire_date = serializers.DateField(
+        write_only=True,
+        required=False,
+        help_text='Fecha de contratación (default: hoy)'
+    )
 
     class Meta:
         model = User
@@ -136,7 +171,10 @@ class UserCreateSerializer(serializers.ModelSerializer):
             'email', 'password', 'password_confirm',
             'first_name', 'last_name', 'phone',
             'role_id', 'default_branch', 'allowed_branches',
-            'company_id'
+            'company_id',
+            # Employee fields
+            'is_employee', 'employee_position', 'employee_branch_id',
+            'employment_type', 'hire_date',
         ]
 
     def validate(self, attrs):
@@ -153,11 +191,38 @@ class UserCreateSerializer(serializers.ModelSerializer):
                     'company_id': 'Debe especificar una empresa para el usuario.'
                 })
 
+        # Validate employee fields if is_employee=True
+        if attrs.get('is_employee'):
+            if not attrs.get('employee_position'):
+                raise serializers.ValidationError({
+                    'employee_position': 'El puesto es requerido para empleados.'
+                })
+            # Branch is optional - employee will be created without it if not provided
+
+            # Validate branch belongs to user's company (if provided)
+            branch = attrs.get('employee_branch_id')
+            if branch:
+                company = attrs.get('company')
+                if request and not request.user.is_superuser:
+                    company = request.user.company
+
+                if company and branch.company_id != company.id:
+                    raise serializers.ValidationError({
+                        'employee_branch_id': 'La sucursal no pertenece a la empresa del usuario.'
+                    })
+
         return attrs
 
     def create(self, validated_data):
         allowed_branches = validated_data.pop('allowed_branches', [])
         password = validated_data.pop('password')
+
+        # Extract employee fields
+        is_employee = validated_data.pop('is_employee', False)
+        employee_position = validated_data.pop('employee_position', None)
+        employee_branch = validated_data.pop('employee_branch_id', None)
+        employment_type = validated_data.pop('employment_type', 'full_time')
+        hire_date = validated_data.pop('hire_date', None) or date.today()
 
         # Check if SuperAdmin is creating this user
         request = self.context.get('request')
@@ -176,6 +241,30 @@ class UserCreateSerializer(serializers.ModelSerializer):
         user.save()
         if allowed_branches:
             user.allowed_branches.set(allowed_branches)
+
+        # Create Employee profile if requested
+        if is_employee and employee_position:
+            # Generate employee code - use branch code if available, else company or default
+            if employee_branch:
+                employee_code = Employee.generate_employee_code(employee_branch.code)
+            else:
+                # Use company slug or default prefix for employees without branch
+                company = validated_data.get('company')
+                if not company and request and not request.user.is_superuser:
+                    company = request.user.company
+                prefix = company.slug[:3].upper() if company else 'EMP'
+                employee_code = Employee.generate_employee_code(prefix)
+
+            Employee.objects.create(
+                user=user,
+                employee_code=employee_code,
+                position=employee_position,
+                branch=employee_branch,  # Can be None - will be assigned later
+                employment_type=employment_type,
+                hire_date=hire_date,
+                status='active',
+            )
+
         return user
 
 

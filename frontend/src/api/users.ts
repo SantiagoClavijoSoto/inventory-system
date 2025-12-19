@@ -14,7 +14,8 @@ export interface Role {
   id: number
   name: string
   description: string
-  role_type: 'system' | 'custom'
+  role_type: 'admin' | 'supervisor' | 'employee' | 'cashier' | 'warehouse' | 'viewer'
+  company: number | null  // null = global system role, number = company-specific role
   permissions: Permission[]
   is_active: boolean
   created_at: string
@@ -53,6 +54,8 @@ export interface UserListParams {
   page_size?: number
 }
 
+export type EmploymentType = 'full_time' | 'part_time' | 'contract' | 'temporary'
+
 export interface CreateUserRequest {
   email: string
   password: string
@@ -64,6 +67,12 @@ export interface CreateUserRequest {
   allowed_branches?: number[]
   is_active?: boolean
   company_id?: number  // For SuperAdmin to assign company
+  // Employee fields (optional)
+  is_employee?: boolean
+  employee_position?: string
+  employee_branch_id?: number
+  employment_type?: EmploymentType
+  hire_date?: string  // YYYY-MM-DD format
 }
 
 export interface UpdateUserRequest {

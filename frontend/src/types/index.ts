@@ -11,7 +11,8 @@ export interface Permission {
 export interface Role {
   id: number
   name: string
-  role_type: 'admin' | 'supervisor' | 'cashier' | 'warehouse' | 'viewer'
+  role_type: 'admin' | 'supervisor' | 'employee' | 'cashier' | 'warehouse' | 'viewer'
+  company: number | null  // null = global system role, number = company-specific role
   description?: string
   permissions?: Permission[]
   is_active: boolean

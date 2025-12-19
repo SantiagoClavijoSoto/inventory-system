@@ -67,6 +67,7 @@ class Role(TimestampMixin):
     ROLE_TYPES = [
         ('admin', 'Administrador'),
         ('supervisor', 'Supervisor'),
+        ('employee', 'Empleado'),
         ('cashier', 'Cajero'),
         ('warehouse', 'Almacenista'),
         ('viewer', 'Solo Lectura'),
