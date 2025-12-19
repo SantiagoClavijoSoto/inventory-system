@@ -12,6 +12,7 @@ from django.utils import timezone
 from drf_spectacular.utils import extend_schema, extend_schema_view
 
 from .models import Supplier, PurchaseOrder, PurchaseOrderItem
+from apps.alerts.activity_mixin import ActivityLogMixin
 from core.mixins import TenantQuerySetMixin
 from .serializers import (
     SupplierListSerializer,
@@ -35,7 +36,7 @@ from apps.users.permissions import HasPermission
     update=extend_schema(description='Update supplier'),
     destroy=extend_schema(description='Delete supplier (soft delete)'),
 )
-class SupplierViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
+class SupplierViewSet(ActivityLogMixin, TenantQuerySetMixin, viewsets.ModelViewSet):
     """
     ViewSet for managing suppliers.
     Auto-filtered by company via TenantQuerySetMixin.
@@ -51,6 +52,8 @@ class SupplierViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
     queryset = Supplier.active.all()
     pagination_class = StandardResultsSetPagination
     permission_classes = [IsAuthenticated]
+    activity_model_name = 'Proveedor'
+    activity_name_field = 'name'
 
     def get_serializer_class(self):
         if self.action == 'list':

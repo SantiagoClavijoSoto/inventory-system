@@ -7,12 +7,14 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     AlertViewSet,
     AlertConfigurationViewSet,
-    UserAlertPreferenceViewSet
+    UserAlertPreferenceViewSet,
+    ActivityLogViewSet,
 )
 
 router = DefaultRouter()
-router.register(r'', AlertViewSet, basename='alert')
+router.register(r'activities', ActivityLogViewSet, basename='activity-log')
 router.register(r'configurations', AlertConfigurationViewSet, basename='alert-configuration')
+router.register(r'', AlertViewSet, basename='alert')
 
 # Create preference viewset instance for manual URL registration
 preference_viewset = UserAlertPreferenceViewSet.as_view({

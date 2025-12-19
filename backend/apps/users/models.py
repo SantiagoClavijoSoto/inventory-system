@@ -1,8 +1,11 @@
 """
 Custom User model with role-based permissions.
 """
+import secrets
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
+from django.utils import timezone
+from datetime import timedelta
 from core.mixins import TimestampMixin
 
 
@@ -249,6 +252,11 @@ class User(AbstractUser, TimestampMixin):
         verbose_name='Debe cambiar contraseña',
         help_text='Forzar cambio de contraseña en el próximo inicio de sesión'
     )
+    email_verified = models.BooleanField(
+        default=True,
+        verbose_name='Email verificado',
+        help_text='El email ha sido verificado. False para usuarios nuevos creados por admin.'
+    )
 
     role = models.ForeignKey(
         Role,
@@ -320,3 +328,90 @@ class User(AbstractUser, TimestampMixin):
         if self.is_superuser:
             return True
         return self.allowed_branches.filter(id=branch_id).exists()
+
+
+class EmailVerificationCode(TimestampMixin):
+    """Código de verificación de email para nuevos usuarios."""
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='verification_codes',
+        verbose_name='Usuario'
+    )
+    code = models.CharField(
+        max_length=6,
+        verbose_name='Código',
+        help_text='Código de 6 dígitos para verificación'
+    )
+    expires_at = models.DateTimeField(
+        verbose_name='Expira en',
+        help_text='Fecha y hora de expiración del código'
+    )
+    attempts = models.PositiveIntegerField(
+        default=0,
+        verbose_name='Intentos',
+        help_text='Número de intentos fallidos de verificación'
+    )
+    is_used = models.BooleanField(
+        default=False,
+        verbose_name='Usado',
+        help_text='El código ya fue utilizado'
+    )
+
+    MAX_ATTEMPTS = 5
+    EXPIRATION_HOURS = 1
+
+    class Meta:
+        db_table = 'email_verification_codes'
+        verbose_name = 'Código de verificación'
+        verbose_name_plural = 'Códigos de verificación'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Código para {self.user.email} - {'Usado' if self.is_used else 'Activo'}"
+
+    @classmethod
+    def generate_code(cls) -> str:
+        """Genera un código de 6 dígitos criptográficamente seguro."""
+        return ''.join([str(secrets.randbelow(10)) for _ in range(6)])
+
+    @classmethod
+    def create_for_user(cls, user: User) -> 'EmailVerificationCode':
+        """Crea un nuevo código de verificación para un usuario.
+
+        Invalida códigos anteriores no usados.
+        """
+        # Invalidar códigos anteriores
+        cls.objects.filter(user=user, is_used=False).update(is_used=True)
+
+        # Crear nuevo código
+        return cls.objects.create(
+            user=user,
+            code=cls.generate_code(),
+            expires_at=timezone.now() + timedelta(hours=cls.EXPIRATION_HOURS)
+        )
+
+    @property
+    def is_expired(self) -> bool:
+        """Verifica si el código ha expirado."""
+        return timezone.now() > self.expires_at
+
+    @property
+    def is_valid(self) -> bool:
+        """Verifica si el código es válido (no usado, no expirado, intentos dentro del límite)."""
+        return (
+            not self.is_used and
+            not self.is_expired and
+            self.attempts < self.MAX_ATTEMPTS
+        )
+
+    def increment_attempts(self) -> None:
+        """Incrementa el contador de intentos fallidos."""
+        self.attempts += 1
+        self.save(update_fields=['attempts', 'updated_at'])
+
+    def mark_as_used(self) -> None:
+        """Marca el código como usado."""
+        self.is_used = True
+        self.save(update_fields=['is_used', 'updated_at'])

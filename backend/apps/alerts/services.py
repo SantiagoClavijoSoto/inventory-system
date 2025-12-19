@@ -1174,3 +1174,129 @@ class SubscriptionAlertGeneratorService:
                 'event_type': event_type
             }
         )
+
+
+class ActivityLogService:
+    """
+    Servicio para registrar y consultar logs de actividad de usuarios.
+    Usado para notificar a administradores sobre acciones de empleados.
+    """
+
+    @staticmethod
+    def log(
+        action: str,
+        user,
+        company,
+        description: str,
+        branch=None,
+        target_type: str = '',
+        target_id: int = None,
+        target_name: str = '',
+        metadata: dict = None
+    ):
+        """
+        Registra una actividad de usuario.
+
+        Args:
+            action: Tipo de acción (debe estar en ACTION_CHOICES)
+            user: Usuario que realizó la acción
+            company: Empresa del usuario
+            description: Descripción legible de la acción
+            branch: Sucursal donde ocurrió (opcional)
+            target_type: Tipo de objeto afectado (ej: 'Product')
+            target_id: ID del objeto afectado
+            target_name: Nombre descriptivo del objeto
+            metadata: Datos adicionales en JSON
+        """
+        from .models import ActivityLog
+
+        if not company:
+            return None
+
+        module = ActivityLog.get_module_for_action(action)
+        user_name = f"{user.first_name} {user.last_name}".strip() if user else "Sistema"
+
+        return ActivityLog.objects.create(
+            company=company,
+            action=action,
+            module=module,
+            user=user,
+            user_name=user_name or (user.email if user else "Sistema"),
+            branch=branch,
+            description=description,
+            target_type=target_type,
+            target_id=target_id,
+            target_name=target_name,
+            metadata=metadata or {}
+        )
+
+    @staticmethod
+    def get_activities(
+        company,
+        user=None,
+        module: str = None,
+        is_read: bool = None,
+        limit: int = 50,
+        offset: int = 0
+    ):
+        """
+        Obtiene actividades filtradas para una empresa.
+
+        Args:
+            company: Empresa para filtrar
+            user: Filtrar por usuario que realizó la acción (opcional)
+            module: Filtrar por módulo (opcional)
+            is_read: Filtrar por estado de lectura (opcional)
+            limit: Cantidad máxima de resultados
+            offset: Offset para paginación
+        """
+        from .models import ActivityLog
+
+        queryset = ActivityLog.objects.filter(company=company)
+
+        if user:
+            queryset = queryset.filter(user=user)
+        if module:
+            queryset = queryset.filter(module=module)
+        if is_read is not None:
+            queryset = queryset.filter(is_read=is_read)
+
+        return queryset.select_related('user', 'branch')[offset:offset + limit]
+
+    @staticmethod
+    def get_unread_count(company) -> int:
+        """Cuenta actividades no leídas para una empresa."""
+        from .models import ActivityLog
+        return ActivityLog.objects.filter(company=company, is_read=False).count()
+
+    @staticmethod
+    def mark_as_read(activity_id: int, user) -> bool:
+        """Marca una actividad como leída."""
+        from .models import ActivityLog
+        from django.utils import timezone
+
+        updated = ActivityLog.objects.filter(
+            id=activity_id,
+            company=user.company,
+            is_read=False
+        ).update(
+            is_read=True,
+            read_by=user,
+            read_at=timezone.now()
+        )
+        return updated > 0
+
+    @staticmethod
+    def mark_all_as_read(company, user) -> int:
+        """Marca todas las actividades de una empresa como leídas."""
+        from .models import ActivityLog
+        from django.utils import timezone
+
+        return ActivityLog.objects.filter(
+            company=company,
+            is_read=False
+        ).update(
+            is_read=True,
+            read_by=user,
+            read_at=timezone.now()
+        )

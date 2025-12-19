@@ -6,6 +6,13 @@ import apiClient, {
 } from './client'
 import type { LoginCredentials, LoginResponse, User } from '@/types'
 
+export interface VerifyEmailResponse {
+  message: string
+  access: string
+  refresh: string
+  user: User
+}
+
 export const authApi = {
   login: async (credentials: LoginCredentials): Promise<LoginResponse> => {
     const response = await apiClient.post<LoginResponse>('/auth/login/', credentials)
@@ -56,5 +63,25 @@ export const authApi = {
     })
     setAccessToken(response.data.access)
     return response.data.access
+  },
+
+  verifyEmail: async (email: string, code: string): Promise<VerifyEmailResponse> => {
+    const response = await apiClient.post<VerifyEmailResponse>('/auth/verify-email/', {
+      email,
+      code,
+    })
+    const { access, refresh } = response.data
+
+    setAccessToken(access)
+    setRefreshToken(refresh)
+
+    return response.data
+  },
+
+  resendVerification: async (email: string): Promise<{ message: string }> => {
+    const response = await apiClient.post<{ message: string }>('/auth/resend-verification/', {
+      email,
+    })
+    return response.data
   },
 }

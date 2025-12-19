@@ -62,14 +62,27 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(error)
 )
 
+// Public endpoints that should NOT trigger automatic 401 handling/redirect
+const PUBLIC_AUTH_ENDPOINTS = [
+  '/auth/login/',
+  '/auth/verify-email/',
+  '/auth/resend-verification/',
+  '/auth/refresh/',
+]
+
 // Response interceptor - Handle errors and token refresh
 apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean }
 
-    // Handle 401 - Try to refresh token
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // Check if this is a public endpoint that shouldn't trigger auth redirect
+    const isPublicEndpoint = PUBLIC_AUTH_ENDPOINTS.some(
+      endpoint => originalRequest.url?.includes(endpoint)
+    )
+
+    // Handle 401 - Try to refresh token (skip for public endpoints)
+    if (error.response?.status === 401 && !originalRequest._retry && !isPublicEndpoint) {
       originalRequest._retry = true
 
       const refreshToken = getRefreshToken()

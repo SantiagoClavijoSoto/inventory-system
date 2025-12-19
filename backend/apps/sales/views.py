@@ -10,6 +10,7 @@ from django.http import HttpResponse
 from django.utils import timezone
 
 from apps.users.permissions import HasPermission
+from apps.alerts.activity_mixin import ActivityLogMixin
 from core.mixins import TenantQuerySetMixin
 from .pdf_service import ReceiptPDFService
 from apps.branches.models import Branch
@@ -28,7 +29,7 @@ from .serializers import (
 from .services import SaleService, CashRegisterService
 
 
-class SaleViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
+class SaleViewSet(ActivityLogMixin, TenantQuerySetMixin, viewsets.ModelViewSet):
     """
     ViewSet for managing sales.
     Auto-filtered by company via TenantQuerySetMixin (through branch).
@@ -49,6 +50,8 @@ class SaleViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
     serializer_class = SaleSerializer
     permission_classes = [IsAuthenticated]
     tenant_field = 'branch__company'  # Filter through branch's company
+    activity_model_name = 'Venta'
+    activity_name_field = 'receipt_number'
 
     def get_queryset(self):
         queryset = super().get_queryset()

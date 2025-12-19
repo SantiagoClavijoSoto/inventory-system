@@ -8,8 +8,8 @@ from rest_framework.permissions import IsAuthenticated
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 
 from apps.users.permissions import HasPermission
-from .models import Alert, AlertConfiguration, UserAlertPreference
-from .services import AlertService, AlertGeneratorService, AlertConfigurationService
+from .models import Alert, AlertConfiguration, UserAlertPreference, ActivityLog
+from .services import AlertService, AlertGeneratorService, AlertConfigurationService, ActivityLogService
 from .serializers import (
     AlertSerializer,
     AlertListSerializer,
@@ -18,7 +18,10 @@ from .serializers import (
     AlertActionSerializer,
     BulkAlertActionSerializer,
     AlertFilterSerializer,
-    AlertCountResponseSerializer
+    AlertCountResponseSerializer,
+    ActivityLogSerializer,
+    ActivityLogListSerializer,
+    ActivityLogFilterSerializer,
 )
 
 
@@ -388,3 +391,131 @@ class UserAlertPreferenceViewSet(viewsets.ViewSet):
     def partial_update(self, request, pk=None):
         """Partially update user's alert preferences."""
         return self.update(request, pk)
+
+
+class ActivityLogViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet for viewing activity logs.
+    Read-only - activity logs are created through the ActivityLogMixin.
+    Multi-tenant: only shows logs for user's company.
+
+    Access restricted to users with alerts:view permission (typically admins).
+    """
+    permission_classes = [IsAuthenticated]
+    serializer_class = ActivityLogSerializer
+    queryset = ActivityLog.objects.all()
+
+    def get_permissions(self):
+        """Only admins with alerts:view can see activity logs."""
+        return [IsAuthenticated(), HasPermission('alerts:view')]
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return ActivityLogListSerializer
+        return ActivityLogSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+
+        # Multi-tenant filter: only show logs for user's company
+        user = self.request.user
+        if hasattr(user, 'company_id') and user.company_id:
+            queryset = queryset.filter(company_id=user.company_id)
+        else:
+            # SuperAdmin without company sees nothing (or could see all)
+            queryset = queryset.none()
+
+        return queryset.select_related(
+            'user', 'branch', 'read_by'
+        ).order_by('-created_at')
+
+    @extend_schema(
+        summary="List activity logs",
+        description="Get activity logs with optional filtering by module, action, or user.",
+        parameters=[
+            OpenApiParameter('module', OpenApiTypes.STR, OpenApiParameter.QUERY, required=False),
+            OpenApiParameter('action', OpenApiTypes.STR, OpenApiParameter.QUERY, required=False),
+            OpenApiParameter('user_id', OpenApiTypes.INT, OpenApiParameter.QUERY, required=False),
+            OpenApiParameter('is_read', OpenApiTypes.BOOL, OpenApiParameter.QUERY, required=False),
+            OpenApiParameter('limit', OpenApiTypes.INT, OpenApiParameter.QUERY, required=False),
+            OpenApiParameter('offset', OpenApiTypes.INT, OpenApiParameter.QUERY, required=False),
+        ],
+        responses={200: ActivityLogListSerializer(many=True)}
+    )
+    def list(self, request):
+        """List activity logs with filtering."""
+        serializer = ActivityLogFilterSerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+
+        user = request.user
+        company = user.company if hasattr(user, 'company') else None
+
+        if not company:
+            return Response([])
+
+        logs = ActivityLogService.get_activities(
+            company=company,
+            user=serializer.validated_data.get('user_id'),
+            module=serializer.validated_data.get('module'),
+            is_read=serializer.validated_data.get('is_read'),
+            limit=serializer.validated_data.get('limit', 50),
+            offset=serializer.validated_data.get('offset', 0)
+        )
+
+        output_serializer = ActivityLogListSerializer(logs, many=True)
+        return Response(output_serializer.data)
+
+    @extend_schema(
+        summary="Get unread activity count",
+        description="Get count of unread activity logs.",
+        responses={200: {'type': 'object', 'properties': {'count': {'type': 'integer'}}}}
+    )
+    @action(detail=False, methods=['get'], url_path='unread-count')
+    def unread_count(self, request):
+        """Get unread activity log count."""
+        user = request.user
+        company = user.company if hasattr(user, 'company') else None
+
+        if not company:
+            return Response({'count': 0})
+
+        count = ActivityLogService.get_unread_count(company)
+        return Response({'count': count})
+
+    @extend_schema(
+        summary="Mark activity as read",
+        description="Mark a single activity log as read.",
+        responses={200: ActivityLogSerializer}
+    )
+    @action(detail=True, methods=['post'], url_path='read')
+    def mark_read(self, request, pk=None):
+        """Mark activity log as read."""
+        success = ActivityLogService.mark_as_read(
+            activity_id=pk,
+            user=request.user
+        )
+        if success:
+            activity = ActivityLog.objects.get(pk=pk)
+            serializer = ActivityLogSerializer(activity)
+            return Response(serializer.data)
+        return Response(
+            {'error': 'No se pudo marcar como leído'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    @extend_schema(
+        summary="Mark all activities as read",
+        description="Mark all unread activity logs as read.",
+        responses={200: {'type': 'object', 'properties': {'count': {'type': 'integer'}}}}
+    )
+    @action(detail=False, methods=['post'], url_path='read-all')
+    def mark_all_read(self, request):
+        """Mark all activity logs as read."""
+        user = request.user
+        company = user.company if hasattr(user, 'company') else None
+
+        if not company:
+            return Response({'count': 0})
+
+        count = ActivityLogService.mark_all_as_read(company, user)
+        return Response({'count': count})

@@ -5,6 +5,7 @@ import { useAuthStore, useIsPlatformAdmin } from '@/store/authStore'
 
 // Auth Pages
 import { Login } from '@/pages/auth/Login'
+import { VerifyEmail } from '@/pages/auth/VerifyEmail'
 
 // Main Pages
 import { Dashboard } from '@/pages/dashboard/Dashboard'
@@ -54,6 +55,10 @@ export const router = createBrowserRouter([
   {
     path: '/login',
     element: <Login />,
+  },
+  {
+    path: '/verify-email',
+    element: <VerifyEmail />,
   },
 
   // Protected routes with MainLayout

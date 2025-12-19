@@ -17,7 +17,7 @@ from rest_framework_simplejwt.exceptions import TokenError
 from drf_spectacular.utils import extend_schema, extend_schema_view
 
 from core.mixins import TenantQuerySetMixin
-from .models import User, Role, Permission
+from .models import User, Role, Permission, EmailVerificationCode
 from .serializers import (
     UserSerializer,
     UserCreateSerializer,
@@ -28,8 +28,11 @@ from .serializers import (
     RoleSerializer,
     PermissionSerializer,
     TokenRefreshResponseSerializer,
+    VerifyEmailSerializer,
+    ResendVerificationSerializer,
 )
 from .permissions import HasPermission
+from .tasks import trigger_verification_email
 
 
 class LoginRateThrottle(AnonRateThrottle):
@@ -136,6 +139,138 @@ class ChangePasswordView(APIView):
         update_session_auth_hash(request, user)
 
         return Response({'message': 'Contraseña actualizada exitosamente.'})
+
+
+class VerificationRateThrottle(AnonRateThrottle):
+    """Throttle for verification attempts - 10 per minute."""
+    scope = 'verification'
+
+
+@extend_schema(tags=['Autenticación'])
+class VerifyEmailView(APIView):
+    """Verify user email with 6-digit code."""
+    permission_classes = [AllowAny]
+    throttle_classes = [VerificationRateThrottle]
+    serializer_class = VerifyEmailSerializer
+
+    @extend_schema(
+        request=VerifyEmailSerializer,
+        responses={
+            200: {'type': 'object', 'properties': {
+                'access': {'type': 'string'},
+                'refresh': {'type': 'string'},
+                'user': {'type': 'object'},
+            }},
+            400: {'type': 'object', 'properties': {'error': {'type': 'string'}}},
+        }
+    )
+    def post(self, request):
+        serializer = VerifyEmailSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data['email']
+        code = serializer.validated_data['code']
+
+        # Find user by email
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response(
+                {'error': 'Usuario no encontrado.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if user.email_verified:
+            return Response(
+                {'error': 'El email ya ha sido verificado.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Find valid verification code
+        verification = EmailVerificationCode.objects.filter(
+            user=user,
+            is_used=False
+        ).order_by('-created_at').first()
+
+        if not verification:
+            return Response(
+                {'error': 'No hay código de verificación activo. Solicita uno nuevo.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not verification.is_valid:
+            if verification.is_expired:
+                return Response(
+                    {'error': 'El código ha expirado. Solicita uno nuevo.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if verification.attempts >= EmailVerificationCode.MAX_ATTEMPTS:
+                return Response(
+                    {'error': 'Demasiados intentos fallidos. Solicita un nuevo código.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        # Check code
+        if verification.code != code:
+            verification.increment_attempts()
+            remaining = EmailVerificationCode.MAX_ATTEMPTS - verification.attempts
+            return Response(
+                {'error': f'Código incorrecto. Te quedan {remaining} intentos.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Success - verify email and mark code as used
+        verification.mark_as_used()
+        user.email_verified = True
+        user.save(update_fields=['email_verified'])
+
+        # Generate JWT tokens for immediate login
+        refresh = RefreshToken.for_user(user)
+
+        return Response({
+            'message': 'Email verificado exitosamente.',
+            'access': str(refresh.access_token),
+            'refresh': str(refresh),
+            'user': UserSerializer(user).data
+        })
+
+
+@extend_schema(tags=['Autenticación'])
+class ResendVerificationView(APIView):
+    """Resend verification code to user email."""
+    permission_classes = [AllowAny]
+    throttle_classes = [VerificationRateThrottle]
+    serializer_class = ResendVerificationSerializer
+
+    @extend_schema(
+        request=ResendVerificationSerializer,
+        responses={
+            200: {'type': 'object', 'properties': {'message': {'type': 'string'}}},
+            400: {'type': 'object', 'properties': {'error': {'type': 'string'}}},
+        }
+    )
+    def post(self, request):
+        serializer = ResendVerificationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data['email']
+
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            # Don't reveal if user exists
+            return Response({'message': 'Si el email existe, se enviará un nuevo código.'})
+
+        if user.email_verified:
+            return Response(
+                {'error': 'El email ya ha sido verificado.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Send new verification email (sync in dev, async in prod)
+        trigger_verification_email(user.id)
+
+        return Response({'message': 'Si el email existe, se enviará un nuevo código.'})
 
 
 @extend_schema_view(

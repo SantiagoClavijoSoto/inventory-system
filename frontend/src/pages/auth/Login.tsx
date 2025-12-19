@@ -60,6 +60,20 @@ export function Login() {
       toast.success('¡Bienvenido!')
       navigate(from, { replace: true })
     } catch (err: unknown) {
+      // Check for email_not_verified error
+      // DRF wraps ValidationError values in arrays, so we need to handle both formats
+      const axiosError = err as { response?: { data?: { email_not_verified?: boolean | string[]; email?: string | string[] } } }
+      if (axiosError.response?.data?.email_not_verified) {
+        // Extract email - handle both string and array formats from DRF
+        const emailFromResponse = axiosError.response.data.email
+        const userEmail = Array.isArray(emailFromResponse)
+          ? emailFromResponse[0]
+          : (emailFromResponse || email.trim())
+        toast('Tu email requiere verificación', { icon: '📧' })
+        navigate('/verify-email', { state: { email: userEmail } })
+        return
+      }
+
       const message = extractErrorMessage(err, 'auth')
       setError(message)
       toast.error(message)

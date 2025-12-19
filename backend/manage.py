@@ -7,7 +7,7 @@ from pathlib import Path
 
 def main():
     """Run administrative tasks."""
-    # Load .env file if exists
+    # Load .env file if exists (values from .env take precedence over existing env vars)
     env_file = Path(__file__).resolve().parent / '.env'
     if env_file.exists():
         with open(env_file) as f:
@@ -15,7 +15,8 @@ def main():
                 line = line.strip()
                 if line and not line.startswith('#') and '=' in line:
                     key, value = line.split('=', 1)
-                    os.environ.setdefault(key.strip(), value.strip())
+                    # Use direct assignment to override any existing values
+                    os.environ[key.strip()] = value.strip()
 
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.development')
     try:

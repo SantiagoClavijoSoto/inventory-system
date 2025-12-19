@@ -15,11 +15,13 @@ interface AuthState {
   logout: () => Promise<void>
   checkAuth: () => Promise<void>
   setUser: (user: User | null) => void
+  setAuthenticatedUser: (user: User) => void // For post-verification login
   setCurrentBranch: (branch: Branch | null) => void
   hasPermission: (permission: string) => boolean
   hasModulePermission: (module: string) => boolean
   canAccessBranch: (branchId: number) => boolean
   isPlatformAdmin: () => boolean
+  isAdmin: () => boolean
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -89,6 +91,12 @@ export const useAuthStore = create<AuthState>()(
 
       setUser: (user) => set({ user }),
 
+      setAuthenticatedUser: (user) => set({
+        user,
+        isAuthenticated: true,
+        isLoading: false,
+      }),
+
       setCurrentBranch: (branch) => set({ currentBranch: branch }),
 
       hasPermission: (permission: string) => {
@@ -122,6 +130,11 @@ export const useAuthStore = create<AuthState>()(
         const { user } = get()
         return user?.is_platform_admin ?? false
       },
+
+      isAdmin: () => {
+        const { user } = get()
+        return user?.role?.role_type === 'admin' || user?.is_platform_admin === true
+      },
     }),
     {
       name: 'auth-storage',
@@ -146,4 +159,9 @@ export const useModulePermission = (module: string): boolean => {
 // Hook for checking if user is platform admin (superadmin)
 export const useIsPlatformAdmin = (): boolean => {
   return useAuthStore((state) => state.isPlatformAdmin())
+}
+
+// Hook for checking if user is admin (company admin or platform admin)
+export const useIsAdmin = (): boolean => {
+  return useAuthStore((state) => state.isAdmin())
 }

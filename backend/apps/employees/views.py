@@ -10,6 +10,7 @@ from django.db.models import Q
 from datetime import datetime
 
 from apps.users.permissions import HasPermission
+from apps.alerts.activity_mixin import ActivityLogMixin
 from apps.branches.models import Branch
 from core.mixins import TenantQuerySetMixin
 from .models import Employee, Shift
@@ -28,7 +29,7 @@ from .serializers import (
 from .services import EmployeeService, ShiftService
 
 
-class EmployeeViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
+class EmployeeViewSet(ActivityLogMixin, TenantQuerySetMixin, viewsets.ModelViewSet):
     """
     ViewSet for managing employees.
     Auto-filtered by company via TenantQuerySetMixin (through branch).
@@ -45,6 +46,8 @@ class EmployeeViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
     queryset = Employee.active_objects.select_related('user', 'branch')
     permission_classes = [IsAuthenticated]
     tenant_field = 'branch__company'  # Filter through branch's company
+    activity_model_name = 'Empleado'
+    activity_name_field = 'full_name'
 
     def get_serializer_class(self):
         if self.action == 'list':

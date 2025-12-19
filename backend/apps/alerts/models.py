@@ -441,3 +441,196 @@ class UserAlertPreference(TimestampMixin, models.Model):
 
     def __str__(self):
         return f"Preferencias de {self.user.email}"
+
+
+class ActivityLog(TimestampMixin, models.Model):
+    """
+    Registro de actividades de usuarios para notificaciones a administradores.
+    Captura acciones importantes realizadas por empleados y admins.
+    Multi-tenant: logs pertenecen a una empresa específica.
+    """
+    # Multi-tenant: company association (REQUIRED)
+    company = models.ForeignKey(
+        'companies.Company',
+        on_delete=models.CASCADE,
+        related_name='activity_logs',
+        verbose_name='Empresa'
+    )
+
+    # Tipos de acciones agrupados por módulo
+    ACTION_CHOICES = [
+        # Inventario
+        ('product_created', 'Producto creado'),
+        ('product_updated', 'Producto modificado'),
+        ('product_deleted', 'Producto eliminado'),
+        ('stock_adjusted', 'Ajuste de stock'),
+        ('stock_transferred', 'Transferencia de stock'),
+        # Ventas
+        ('sale_created', 'Venta realizada'),
+        ('sale_voided', 'Venta anulada'),
+        ('cash_register_opened', 'Caja abierta'),
+        ('cash_register_closed', 'Caja cerrada'),
+        # Empleados
+        ('employee_created', 'Empleado creado'),
+        ('employee_updated', 'Empleado modificado'),
+        ('shift_started', 'Turno iniciado'),
+        ('shift_ended', 'Turno finalizado'),
+        # Sucursales
+        ('branch_created', 'Sucursal creada'),
+        ('branch_updated', 'Sucursal modificada'),
+        # Usuarios
+        ('user_created', 'Usuario creado'),
+        ('user_updated', 'Usuario modificado'),
+        ('role_changed', 'Rol cambiado'),
+        # Proveedores
+        ('supplier_created', 'Proveedor creado'),
+        ('supplier_updated', 'Proveedor modificado'),
+        ('purchase_order_created', 'Orden de compra creada'),
+    ]
+
+    # Módulos para filtrado
+    MODULE_CHOICES = [
+        ('inventory', 'Inventario'),
+        ('sales', 'Ventas'),
+        ('employees', 'Empleados'),
+        ('branches', 'Sucursales'),
+        ('users', 'Usuarios'),
+        ('suppliers', 'Proveedores'),
+    ]
+
+    action = models.CharField(
+        max_length=50,
+        choices=ACTION_CHOICES,
+        verbose_name='Acción'
+    )
+
+    module = models.CharField(
+        max_length=20,
+        choices=MODULE_CHOICES,
+        verbose_name='Módulo',
+        db_index=True
+    )
+
+    # Usuario que realizó la acción
+    user = models.ForeignKey(
+        'users.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='activity_logs',
+        verbose_name='Usuario'
+    )
+
+    # Nombre del usuario (guardado para mantener historial si se elimina)
+    user_name = models.CharField(
+        max_length=300,
+        verbose_name='Nombre del usuario'
+    )
+
+    # Sucursal donde ocurrió (opcional)
+    branch = models.ForeignKey(
+        'branches.Branch',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='activity_logs',
+        verbose_name='Sucursal'
+    )
+
+    # Descripción legible de la acción
+    description = models.CharField(
+        max_length=500,
+        verbose_name='Descripción'
+    )
+
+    # Referencia genérica al objeto afectado
+    target_type = models.CharField(
+        max_length=50,
+        blank=True,
+        verbose_name='Tipo de objeto',
+        help_text='Nombre del modelo afectado (ej: Product, Sale)'
+    )
+
+    target_id = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name='ID del objeto'
+    )
+
+    target_name = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name='Nombre del objeto',
+        help_text='Nombre descriptivo del objeto afectado'
+    )
+
+    # Metadata adicional en JSON (cambios específicos, valores anteriores, etc)
+    metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name='Metadatos',
+        help_text='Datos adicionales como cambios realizados, valores anteriores/nuevos'
+    )
+
+    # Control de lectura por admins
+    is_read = models.BooleanField(
+        default=False,
+        verbose_name='Leído',
+        db_index=True
+    )
+
+    read_by = models.ForeignKey(
+        'users.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='read_activity_logs',
+        verbose_name='Leído por'
+    )
+
+    read_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='Fecha de lectura'
+    )
+
+    class Meta:
+        verbose_name = 'Registro de actividad'
+        verbose_name_plural = 'Registros de actividad'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['company', '-created_at']),
+            models.Index(fields=['company', 'module', '-created_at']),
+            models.Index(fields=['company', 'is_read', '-created_at']),
+            models.Index(fields=['company', 'user', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.user_name}: {self.description}"
+
+    @classmethod
+    def get_module_for_action(cls, action: str) -> str:
+        """Devuelve el módulo correspondiente a una acción."""
+        module_mapping = {
+            'product_created': 'inventory',
+            'product_updated': 'inventory',
+            'product_deleted': 'inventory',
+            'stock_adjusted': 'inventory',
+            'stock_transferred': 'inventory',
+            'sale_created': 'sales',
+            'sale_voided': 'sales',
+            'cash_register_opened': 'sales',
+            'cash_register_closed': 'sales',
+            'employee_created': 'employees',
+            'employee_updated': 'employees',
+            'shift_started': 'employees',
+            'shift_ended': 'employees',
+            'branch_created': 'branches',
+            'branch_updated': 'branches',
+            'user_created': 'users',
+            'user_updated': 'users',
+            'role_changed': 'users',
+            'supplier_created': 'suppliers',
+            'supplier_updated': 'suppliers',
+            'purchase_order_created': 'suppliers',
+        }
+        return module_mapping.get(action, 'inventory')

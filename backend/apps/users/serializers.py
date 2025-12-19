@@ -214,6 +214,8 @@ class UserCreateSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
+        from .tasks import trigger_verification_email
+
         allowed_branches = validated_data.pop('allowed_branches', [])
         password = validated_data.pop('password')
 
@@ -237,6 +239,9 @@ class UserCreateSerializer(serializers.ModelSerializer):
 
         # Force password change on first login
         user.must_change_password = True
+
+        # New users must verify their email
+        user.email_verified = False
 
         user.save()
         if allowed_branches:
@@ -264,6 +269,9 @@ class UserCreateSerializer(serializers.ModelSerializer):
                 hire_date=hire_date,
                 status='active',
             )
+
+        # Send verification email (sync in dev, async in prod)
+        trigger_verification_email(user.id)
 
         return user
 
@@ -346,6 +354,13 @@ class LoginSerializer(serializers.Serializer):
                 code='authorization'
             )
 
+        # Check if email is verified
+        if not user.email_verified:
+            raise serializers.ValidationError(
+                {'email_not_verified': True, 'email': email},
+                code='email_not_verified'
+            )
+
         attrs['user'] = user
         return attrs
 
@@ -360,3 +375,20 @@ class LoginResponseSerializer(serializers.Serializer):
 class TokenRefreshResponseSerializer(serializers.Serializer):
     """Serializer for token refresh response."""
     access = serializers.CharField()
+
+
+class VerifyEmailSerializer(serializers.Serializer):
+    """Serializer for email verification."""
+    email = serializers.EmailField(required=True)
+    code = serializers.CharField(required=True, min_length=6, max_length=6)
+
+    def validate_code(self, value):
+        """Ensure code is 6 digits."""
+        if not value.isdigit():
+            raise serializers.ValidationError('El código debe contener solo números.')
+        return value
+
+
+class ResendVerificationSerializer(serializers.Serializer):
+    """Serializer for resending verification code."""
+    email = serializers.EmailField(required=True)

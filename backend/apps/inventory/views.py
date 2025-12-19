@@ -7,6 +7,7 @@ from django.db import transaction
 from django.db.models import Sum, Q
 
 from apps.users.permissions import HasPermission, CanAccessBranch
+from apps.alerts.activity_mixin import ActivityLogMixin
 from core.mixins import TenantQuerySetMixin
 from .models import Category, Product, BranchStock, StockMovement, StockAlert
 from .serializers import (
@@ -74,7 +75,7 @@ class CategoryViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
         instance.save()
 
 
-class ProductViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
+class ProductViewSet(ActivityLogMixin, TenantQuerySetMixin, viewsets.ModelViewSet):
     """
     ViewSet for products with barcode search and stock management.
     Auto-filtered by company via TenantQuerySetMixin.
@@ -83,6 +84,8 @@ class ProductViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
         'category', 'supplier'
     )
     permission_classes = [IsAuthenticated]
+    activity_model_name = 'Producto'
+    activity_name_field = 'name'
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = ProductFilter
     search_fields = ['name', 'sku', 'barcode', 'description']

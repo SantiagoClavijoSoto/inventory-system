@@ -5,7 +5,7 @@
 
 // Known safe error patterns that can be shown to users
 const SAFE_ERROR_PATTERNS = [
-  /^(no|ya|el|la|los|las|este|esta|error|stock|cantidad|usuario|contraseña|email|sucursal|producto|proveedor|orden|permiso)/i,
+  /^(no|ya|el|la|los|las|este|esta|error|stock|cantidad|usuario|contraseña|email|sucursal|producto|proveedor|orden|permiso|código|demasiados)/i,
   /insuficiente/i,
   /no encontrad/i,
   /no existe/i,
@@ -19,6 +19,12 @@ const SAFE_ERROR_PATTERNS = [
   /credenciales/i,
   /contraseña incorrecta/i,
   /sesión/i,
+  /código/i,
+  /incorrecto/i,
+  /intentos/i,
+  /expirado/i,
+  /verificado/i,
+  /verificación/i,
 ]
 
 // Patterns that indicate sensitive/internal errors that should NOT be shown

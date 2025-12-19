@@ -280,3 +280,99 @@ export const alertPreferencesApi = {
     return response.data
   },
 }
+
+// Activity Log Types
+export type ActivityModule =
+  | 'inventory'
+  | 'sales'
+  | 'employees'
+  | 'branches'
+  | 'users'
+  | 'suppliers'
+
+export type ActivityAction =
+  | 'product_created'
+  | 'product_updated'
+  | 'product_deleted'
+  | 'stock_adjusted'
+  | 'stock_transferred'
+  | 'sale_created'
+  | 'sale_voided'
+  | 'cash_register_opened'
+  | 'cash_register_closed'
+  | 'employee_created'
+  | 'employee_updated'
+  | 'shift_started'
+  | 'shift_ended'
+  | 'branch_created'
+  | 'branch_updated'
+  | 'user_created'
+  | 'user_updated'
+  | 'role_changed'
+  | 'supplier_created'
+  | 'supplier_updated'
+  | 'purchase_order_created'
+
+export interface ActivityLog {
+  id: number
+  action: ActivityAction
+  action_display: string
+  module: ActivityModule
+  module_display: string
+  user?: number
+  user_name: string
+  branch?: number
+  branch_name?: string
+  description: string
+  target_type: string
+  target_id?: number
+  target_name: string
+  metadata: Record<string, unknown>
+  is_read: boolean
+  read_by?: number
+  read_by_name?: string
+  read_at?: string
+  created_at: string
+}
+
+export interface ActivityLogListParams {
+  module?: ActivityModule
+  action?: ActivityAction
+  user_id?: number
+  is_read?: boolean
+  limit?: number
+  offset?: number
+}
+
+// Activity Log API
+export const activityLogApi = {
+  // Get all activity logs
+  getAll: async (params?: ActivityLogListParams): Promise<ActivityLog[]> => {
+    const response = await apiClient.get('/alerts/activities/', { params })
+    return response.data
+  },
+
+  // Get single activity log
+  getById: async (id: number): Promise<ActivityLog> => {
+    const response = await apiClient.get(`/alerts/activities/${id}/`)
+    return response.data
+  },
+
+  // Get unread count
+  getUnreadCount: async (): Promise<{ count: number }> => {
+    const response = await apiClient.get('/alerts/activities/unread-count/')
+    return response.data
+  },
+
+  // Mark as read
+  markAsRead: async (id: number): Promise<ActivityLog> => {
+    const response = await apiClient.post(`/alerts/activities/${id}/read/`)
+    return response.data
+  },
+
+  // Mark all as read
+  markAllAsRead: async (): Promise<{ count: number }> => {
+    const response = await apiClient.post('/alerts/activities/read-all/')
+    return response.data
+  },
+}

@@ -2,7 +2,7 @@
 Serializers for the Alerts app.
 """
 from rest_framework import serializers
-from .models import Alert, AlertConfiguration, UserAlertPreference
+from .models import Alert, AlertConfiguration, UserAlertPreference, ActivityLog
 
 
 class AlertSerializer(serializers.ModelSerializer):
@@ -255,3 +255,99 @@ class AlertCountResponseSerializer(serializers.Serializer):
     high = serializers.IntegerField()
     medium = serializers.IntegerField()
     low = serializers.IntegerField()
+
+
+class ActivityLogSerializer(serializers.ModelSerializer):
+    """Full serializer for ActivityLog model."""
+    action_display = serializers.CharField(
+        source='get_action_display',
+        read_only=True
+    )
+    module_display = serializers.CharField(
+        source='get_module_display',
+        read_only=True
+    )
+    branch_name = serializers.CharField(
+        source='branch.name',
+        read_only=True,
+        allow_null=True
+    )
+    read_by_name = serializers.CharField(
+        source='read_by.full_name',
+        read_only=True,
+        allow_null=True
+    )
+
+    class Meta:
+        model = ActivityLog
+        fields = [
+            'id',
+            'action',
+            'action_display',
+            'module',
+            'module_display',
+            'user',
+            'user_name',
+            'branch',
+            'branch_name',
+            'description',
+            'target_type',
+            'target_id',
+            'target_name',
+            'metadata',
+            'is_read',
+            'read_by',
+            'read_by_name',
+            'read_at',
+            'created_at',
+        ]
+        read_only_fields = fields
+
+
+class ActivityLogListSerializer(serializers.ModelSerializer):
+    """Compact serializer for activity log lists."""
+    action_display = serializers.CharField(
+        source='get_action_display',
+        read_only=True
+    )
+    module_display = serializers.CharField(
+        source='get_module_display',
+        read_only=True
+    )
+    branch_name = serializers.CharField(
+        source='branch.name',
+        read_only=True,
+        allow_null=True
+    )
+
+    class Meta:
+        model = ActivityLog
+        fields = [
+            'id',
+            'action',
+            'action_display',
+            'module',
+            'module_display',
+            'user_name',
+            'branch_name',
+            'description',
+            'target_name',
+            'is_read',
+            'created_at',
+        ]
+
+
+class ActivityLogFilterSerializer(serializers.Serializer):
+    """Serializer for activity log filtering parameters."""
+    module = serializers.ChoiceField(
+        choices=ActivityLog.MODULE_CHOICES,
+        required=False
+    )
+    action = serializers.ChoiceField(
+        choices=ActivityLog.ACTION_CHOICES,
+        required=False
+    )
+    user_id = serializers.IntegerField(required=False)
+    is_read = serializers.BooleanField(required=False, allow_null=True)
+    limit = serializers.IntegerField(default=50, min_value=1, max_value=200)
+    offset = serializers.IntegerField(default=0, min_value=0)

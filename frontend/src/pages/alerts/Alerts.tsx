@@ -3,13 +3,15 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   alertsApi,
   alertPreferencesApi,
+  activityLogApi,
   type AlertListParams,
   type Alert,
   type AlertSeverity,
   type AlertStatus,
   type AlertType,
+  type ActivityModule,
 } from '@/api/alerts'
-import { useIsPlatformAdmin } from '@/store/authStore'
+import { useIsPlatformAdmin, useIsAdmin } from '@/store/authStore'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import {
@@ -41,11 +43,20 @@ import {
   UserX,
   AlertOctagon,
   Gauge,
+  Users,
+  Store,
+  ShoppingCart,
+  Truck,
+  FileText,
 } from 'lucide-react'
+
+type TabType = 'alerts' | 'activity'
 
 export function Alerts() {
   const queryClient = useQueryClient()
   const isPlatformAdmin = useIsPlatformAdmin()
+  const isAdmin = useIsAdmin()
+  const [activeTab, setActiveTab] = useState<TabType>('alerts')
   const [filters, setFilters] = useState<AlertListParams>({
     limit: 50,
   })
@@ -148,61 +159,94 @@ export function Alerts() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-secondary-900">Alertas</h1>
+          <h1 className="text-2xl font-bold text-secondary-900">Alertas y Actividad</h1>
           <p className="text-secondary-500 mt-1">
-            Gestiona las alertas y notificaciones del sistema
+            Gestiona las alertas del sistema y visualiza la actividad de usuarios
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => refetch()}>
+          <Button variant="outline" size="sm" onClick={() => activeTab === 'alerts' ? refetch() : queryClient.invalidateQueries({ queryKey: ['activity-logs'] })}>
             <RefreshCw className="w-4 h-4 mr-2" />
             Actualizar
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setShowPreferences(true)}>
-            <Settings className="w-4 h-4 mr-2" />
-            Preferencias
-          </Button>
+          {activeTab === 'alerts' && (
+            <Button variant="outline" size="sm" onClick={() => setShowPreferences(true)}>
+              <Settings className="w-4 h-4 mr-2" />
+              Preferencias
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        <SummaryCard
-          title="Total No Leídas"
-          value={unreadCount?.total || 0}
-          icon={Bell}
-          iconBg="bg-primary-100"
-          iconColor="text-primary-600"
-        />
-        <SummaryCard
-          title="Críticas"
-          value={unreadCount?.by_severity?.critical || 0}
-          icon={XCircle}
-          iconBg="bg-danger-100"
-          iconColor="text-danger-600"
-        />
-        <SummaryCard
-          title="Altas"
-          value={unreadCount?.by_severity?.high || 0}
-          icon={AlertTriangle}
-          iconBg="bg-warning-100"
-          iconColor="text-warning-600"
-        />
-        <SummaryCard
-          title="Medias"
-          value={unreadCount?.by_severity?.medium || 0}
-          icon={AlertCircle}
-          iconBg="bg-info-100"
-          iconColor="text-info-600"
-        />
-        <SummaryCard
-          title="Bajas"
-          value={unreadCount?.by_severity?.low || 0}
-          icon={Info}
-          iconBg="bg-secondary-100"
-          iconColor="text-secondary-600"
-        />
-      </div>
+      {/* Tabs - solo mostrar si es admin */}
+      {isAdmin && (
+        <div className="flex border-b border-secondary-200">
+          <button
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'alerts'
+                ? 'border-primary-500 text-primary-600'
+                : 'border-transparent text-secondary-500 hover:text-secondary-700'
+            }`}
+            onClick={() => setActiveTab('alerts')}
+          >
+            <Bell className="w-4 h-4 inline-block mr-2" />
+            Alertas del Sistema
+          </button>
+          <button
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'activity'
+                ? 'border-primary-500 text-primary-600'
+                : 'border-transparent text-secondary-500 hover:text-secondary-700'
+            }`}
+            onClick={() => setActiveTab('activity')}
+          >
+            <Activity className="w-4 h-4 inline-block mr-2" />
+            Actividad de Usuarios
+          </button>
+        </div>
+      )}
+
+      {/* Tab Content */}
+      {activeTab === 'alerts' ? (
+        <>
+          {/* Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <SummaryCard
+              title="Total No Leídas"
+              value={unreadCount?.total || 0}
+              icon={Bell}
+              iconBg="bg-primary-100"
+              iconColor="text-primary-600"
+            />
+            <SummaryCard
+              title="Críticas"
+              value={unreadCount?.by_severity?.critical || 0}
+              icon={XCircle}
+              iconBg="bg-danger-100"
+              iconColor="text-danger-600"
+            />
+            <SummaryCard
+              title="Altas"
+              value={unreadCount?.by_severity?.high || 0}
+              icon={AlertTriangle}
+              iconBg="bg-warning-100"
+              iconColor="text-warning-600"
+            />
+            <SummaryCard
+              title="Medias"
+              value={unreadCount?.by_severity?.medium || 0}
+              icon={AlertCircle}
+              iconBg="bg-info-100"
+              iconColor="text-info-600"
+            />
+            <SummaryCard
+              title="Bajas"
+              value={unreadCount?.by_severity?.low || 0}
+              icon={Info}
+              iconBg="bg-secondary-100"
+              iconColor="text-secondary-600"
+            />
+          </div>
 
       {/* Filters */}
       <div className="bg-white rounded-lg shadow-sm border border-secondary-200 p-4">
@@ -346,6 +390,10 @@ export function Alerts() {
           </div>
         )}
       </div>
+        </>
+      ) : (
+        <ActivityLogTab />
+      )}
 
       {/* Alert Detail Modal */}
       {selectedAlert && (
@@ -802,5 +850,173 @@ function PreferenceToggle({ label, checked }: { label: string; checked: boolean 
         {checked ? 'Activo' : 'Inactivo'}
       </span>
     </div>
+  )
+}
+
+// Activity Log Tab Component
+function ActivityLogTab() {
+  const queryClient = useQueryClient()
+  const [moduleFilter, setModuleFilter] = useState<ActivityModule | ''>('')
+
+  const { data: activities, isLoading } = useQuery({
+    queryKey: ['activity-logs', moduleFilter],
+    queryFn: () => activityLogApi.getAll({ module: moduleFilter || undefined, limit: 100 }),
+  })
+
+  const { data: unreadCount } = useQuery({
+    queryKey: ['activity-logs-unread'],
+    queryFn: () => activityLogApi.getUnreadCount(),
+  })
+
+  const markAllReadMutation = useMutation({
+    mutationFn: () => activityLogApi.markAllAsRead(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['activity-logs'] })
+      queryClient.invalidateQueries({ queryKey: ['activity-logs-unread'] })
+    },
+  })
+
+  const markReadMutation = useMutation({
+    mutationFn: (id: number) => activityLogApi.markAsRead(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['activity-logs'] })
+      queryClient.invalidateQueries({ queryKey: ['activity-logs-unread'] })
+    },
+  })
+
+  const moduleIcons: Record<ActivityModule, React.ElementType> = {
+    inventory: Package,
+    sales: ShoppingCart,
+    employees: Users,
+    branches: Store,
+    users: Users,
+    suppliers: Truck,
+  }
+
+  const moduleColors: Record<ActivityModule, { bg: string; text: string }> = {
+    inventory: { bg: 'bg-blue-100', text: 'text-blue-600' },
+    sales: { bg: 'bg-green-100', text: 'text-green-600' },
+    employees: { bg: 'bg-purple-100', text: 'text-purple-600' },
+    branches: { bg: 'bg-orange-100', text: 'text-orange-600' },
+    users: { bg: 'bg-indigo-100', text: 'text-indigo-600' },
+    suppliers: { bg: 'bg-teal-100', text: 'text-teal-600' },
+  }
+
+  return (
+    <>
+      {/* Summary */}
+      <div className="bg-white rounded-lg shadow-sm border border-secondary-200 p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary-100">
+              <Activity className="w-5 h-5 text-primary-600" />
+            </div>
+            <div>
+              <p className="text-sm text-secondary-500">Actividades sin leer</p>
+              <p className="text-xl font-bold text-secondary-900">{unreadCount?.count || 0}</p>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => markAllReadMutation.mutate()}
+            disabled={markAllReadMutation.isPending || !unreadCount?.count}
+          >
+            <CheckCheck className="w-4 h-4 mr-2" />
+            Marcar todas como leídas
+          </Button>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white rounded-lg shadow-sm border border-secondary-200 p-4">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Filter className="w-4 h-4 text-secondary-400" />
+            <span className="text-sm font-medium text-secondary-700">Filtrar por módulo:</span>
+          </div>
+
+          <select
+            className="px-3 py-2 border border-secondary-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            value={moduleFilter}
+            onChange={(e) => setModuleFilter(e.target.value as ActivityModule | '')}
+          >
+            <option value="">Todos los módulos</option>
+            <option value="inventory">Inventario</option>
+            <option value="sales">Ventas</option>
+            <option value="employees">Empleados</option>
+            <option value="branches">Sucursales</option>
+            <option value="users">Usuarios</option>
+            <option value="suppliers">Proveedores</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Activity List */}
+      <div className="bg-white rounded-lg shadow-sm border border-secondary-200 overflow-hidden">
+        {isLoading ? (
+          <div className="p-8 text-center text-secondary-500">Cargando actividad...</div>
+        ) : !activities || activities.length === 0 ? (
+          <div className="p-8 text-center">
+            <FileText className="w-12 h-12 text-secondary-300 mx-auto mb-4" />
+            <p className="text-secondary-500">No hay actividad registrada</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-secondary-200">
+            {activities.map((activity) => {
+              const ModuleIcon = moduleIcons[activity.module] || FileText
+              const colors = moduleColors[activity.module] || { bg: 'bg-secondary-100', text: 'text-secondary-600' }
+
+              return (
+                <div
+                  key={activity.id}
+                  className={`flex items-start gap-4 px-4 py-4 ${
+                    !activity.is_read ? 'bg-primary-50/30' : 'bg-white'
+                  } hover:bg-secondary-50 transition-colors`}
+                >
+                  <div className={`p-2 rounded-lg ${colors.bg}`}>
+                    <ModuleIcon className={`w-5 h-5 ${colors.text}`} />
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-sm font-medium text-secondary-900">
+                        {activity.user_name}
+                      </span>
+                      {!activity.is_read && (
+                        <span className="w-2 h-2 bg-primary-500 rounded-full" />
+                      )}
+                    </div>
+                    <p className="text-sm text-secondary-600">{activity.description}</p>
+                    <div className="flex items-center gap-3 mt-2">
+                      <Badge variant="secondary">{activity.module_display}</Badge>
+                      {activity.branch_name && (
+                        <span className="text-xs text-secondary-500">
+                          <Store className="w-3 h-3 inline mr-1" />
+                          {activity.branch_name}
+                        </span>
+                      )}
+                      <span className="text-xs text-secondary-400">
+                        {new Date(activity.created_at).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+
+                  {!activity.is_read && (
+                    <button
+                      onClick={() => markReadMutation.mutate(activity.id)}
+                      className="p-1 hover:bg-secondary-100 rounded"
+                      title="Marcar como leída"
+                    >
+                      <Eye className="w-4 h-4 text-secondary-400" />
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </>
   )
 }
