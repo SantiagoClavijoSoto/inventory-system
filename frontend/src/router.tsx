@@ -1,12 +1,27 @@
-import { createBrowserRouter } from 'react-router-dom'
+import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { MainLayout } from '@/components/layout'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
+import { useAuthStore, useIsPlatformAdmin } from '@/store/authStore'
 
 // Auth Pages
 import { Login } from '@/pages/auth/Login'
 
 // Main Pages
 import { Dashboard } from '@/pages/dashboard/Dashboard'
+
+// Home redirect component - sends users to appropriate page based on permissions
+function HomeRedirect() {
+  const { hasModulePermission } = useAuthStore()
+  const isPlatformAdmin = useIsPlatformAdmin()
+
+  // Platform admins and users with dashboard permission go to Dashboard
+  if (isPlatformAdmin || hasModulePermission('dashboard')) {
+    return <Dashboard />
+  }
+
+  // Users without dashboard permission go to Schedule (clock in/out)
+  return <Navigate to="/schedule" replace />
+}
 import { Products } from '@/pages/inventory/Products'
 import { Employees } from '@/pages/employees/Employees'
 import { Schedule } from '@/pages/schedule/Schedule'
@@ -52,7 +67,7 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <Dashboard />,
+        element: <HomeRedirect />,
       },
       {
         path: 'inventory',

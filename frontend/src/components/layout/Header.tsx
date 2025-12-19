@@ -36,7 +36,7 @@ const alertTypeIcons: Record<string, typeof Package> = {
 export function Header() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { user, currentBranch, setCurrentBranch } = useAuthStore()
+  const { user, currentBranch, setCurrentBranch, hasModulePermission } = useAuthStore()
   const { loadBranding, branding } = useThemeStore()
   const [showBranchSelector, setShowBranchSelector] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
@@ -45,12 +45,15 @@ export function Header() {
   const dropdownRef = useRef<HTMLDivElement>(null)
   const notificationRef = useRef<HTMLDivElement>(null)
 
+  // Check if user can view alerts (needs alerts:* or inventory:* permission)
+  const canViewAlerts = hasModulePermission('alerts') || hasModulePermission('inventory')
+
   // Fetch unread alert count
   const { data: unreadCount } = useQuery<AlertUnreadCount>({
     queryKey: ['alerts', 'unread-count', currentBranch?.id],
     queryFn: () => alertsApi.getUnreadCount(currentBranch?.id),
     refetchInterval: 30000, // Refetch every 30 seconds
-    enabled: !!currentBranch,
+    enabled: !!currentBranch && canViewAlerts,
   })
 
   // Fetch recent alerts for dropdown
@@ -62,7 +65,7 @@ export function Header() {
         status: 'active',
         limit: 5,
       }),
-    enabled: showNotifications && !!currentBranch,
+    enabled: showNotifications && !!currentBranch && canViewAlerts,
   })
 
   // Mark as read mutation
@@ -229,8 +232,9 @@ export function Header() {
           )}
         </div>
 
-        {/* Notifications */}
-        <div className="relative" ref={notificationRef}>
+        {/* Notifications - only show for users with alerts or inventory permission */}
+        {canViewAlerts && (
+          <div className="relative" ref={notificationRef}>
           <button
             onClick={() => setShowNotifications(!showNotifications)}
             className="relative p-2 text-secondary-500 hover:text-secondary-700 hover:bg-secondary-100 rounded-lg transition-colors"
@@ -332,7 +336,8 @@ export function Header() {
               </div>
             </div>
           )}
-        </div>
+          </div>
+        )}
 
         {/* User Avatar */}
         <div className="flex items-center gap-3">

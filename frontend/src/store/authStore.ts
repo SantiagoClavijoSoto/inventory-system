@@ -105,9 +105,7 @@ export const useAuthStore = create<AuthState>()(
         if (!user) return false
         // Platform admins (superusers) have all permissions
         if (user.is_platform_admin) return true
-        // Dashboard is accessible to all authenticated users
-        if (module === 'dashboard') return true
-        // All other users: check their actual permissions from the backend
+        // Check actual permissions from the backend
         return user.permissions?.some((p) => p.startsWith(`${module}:`)) ?? false
       },
 
