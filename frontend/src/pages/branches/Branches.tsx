@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore, useIsPlatformAdmin } from '@/store/authStore'
+import { useThemeStore } from '@/store/themeStore'
 import {
   branchesApi,
   type Branch,
@@ -931,6 +932,8 @@ function BrandingModal({
   branch: Branch
 }) {
   const queryClient = useQueryClient()
+  const { currentBranch } = useAuthStore()
+  const { loadBranding } = useThemeStore()
   const [formData, setFormData] = useState({
     store_name: branch.store_name || '',
     primary_color: branch.primary_color,
@@ -949,6 +952,10 @@ function BrandingModal({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['branches'] })
       queryClient.invalidateQueries({ queryKey: ['branch-branding'] })
+      // Refresh theme if editing current branch
+      if (currentBranch?.id === branch.id) {
+        loadBranding(branch.id)
+      }
       toast.success('Configuración de marca actualizada')
       onClose()
     },

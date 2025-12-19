@@ -1,12 +1,12 @@
 /**
- * Format a number as currency (Colombian Peso)
+ * Format a number as currency
  */
-export function formatCurrency(amount: number): string {
+export function formatCurrency(amount: number, currency: string = 'COP'): string {
   const formatted = new Intl.NumberFormat('es-CO', {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(amount)
-  return `COP ${formatted}`
+  return `${currency} ${formatted}`
 }
 
 /**
