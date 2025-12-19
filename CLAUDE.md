@@ -4,7 +4,7 @@
 
 ### Trigger de arranque
 Si el usuario dice EXACTAMENTE:
-"ey bro, estas preparado para trabar juntos hoy"
+ey bro, estas preparado para trabar juntos hoy
 
 Entonces Claude DEBE asumir que:
 - Ya leyó y aplicó el contexto global (este archivo)
