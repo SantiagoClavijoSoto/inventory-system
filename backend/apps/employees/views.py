@@ -353,7 +353,11 @@ class ShiftViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
 
         branch_id = serializer.validated_data.get('branch_id')
         branch = None
-        if branch_id:
+
+        # If no branch_id provided, try to use employee's assigned branch
+        if not branch_id and employee.branch:
+            branch = employee.branch
+        elif branch_id:
             # Validate branch belongs to user's company (multi-tenant security)
             user_company = request.user.company
             if user_company:
@@ -365,6 +369,13 @@ class ShiftViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
                 )
             else:
                 branch = get_object_or_404(Branch, id=branch_id, is_active=True)
+
+        # Validate that we have a branch to clock in to
+        if not branch:
+            return Response(
+                {'error': 'No tiene sucursal asignada. Contacte al administrador.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
             shift = ShiftService.clock_in(employee=employee, branch=branch)
@@ -446,14 +457,15 @@ class ShiftViewSet(TenantQuerySetMixin, viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def current(self, request):
-        """Get current user's active shift."""
+        """Get current user's active shift.
+
+        Returns null if user has no employee profile (not all users are employees).
+        """
         try:
             employee = request.user.employee_profile
         except Employee.DoesNotExist:
-            return Response(
-                {'error': 'No tiene perfil de empleado'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            # User is not an employee - return null gracefully
+            return Response(None)
 
         current_shift = employee.get_current_shift()
 

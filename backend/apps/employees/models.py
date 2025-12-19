@@ -69,12 +69,15 @@ class Employee(TimestampMixin, SoftDeleteMixin, models.Model):
         verbose_name='Fecha de terminación'
     )
 
-    # Primary branch assignment
+    # Primary branch assignment (nullable - can be assigned later)
     branch = models.ForeignKey(
         'branches.Branch',
         on_delete=models.PROTECT,
         related_name='employees',
-        verbose_name='Sucursal asignada'
+        verbose_name='Sucursal asignada',
+        null=True,
+        blank=True,
+        help_text='Puede asignarse después de crear el empleado'
     )
 
     # Compensation

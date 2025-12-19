@@ -365,11 +365,11 @@ function EmployeesTodayTable({ branchId }: { branchId?: number }) {
     queryKey: ['branch-shifts-today', branchId, today],
     queryFn: () =>
       shiftsApi.list({
-        branch: branchId,
+        branch: branchId, // undefined = all branches (filtered by tenant)
         date_from: today,
         date_to: today,
       }),
-    enabled: !!branchId,
+    // Always enabled - tenant filter handles company isolation
   })
 
   const getStatusBadge = (shift: Shift) => {
